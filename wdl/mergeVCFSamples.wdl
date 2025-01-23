@@ -11,10 +11,14 @@ struct RuntimeAttr {
 
 workflow MergeVCFs {
     input {
+        # give either text file with VCF paths or Array[File] of VCF paths
         File? vcf_list_file
         Array[File]? vcf_files
+        # if missing tags in header gives an error with bcftools merge, mainly for DDD (probably safe to ignore this parameter for other cohorts)
         File? header_file
+        # hacky renaming, just for DDD (safe to ignore this parameter for other cohorts)
         Boolean rename_samples=false
+        # recalculate AF from AC and AN after merge
         Boolean recalculate_af=false
         String sample_set_id
         String sv_base_mini_docker
