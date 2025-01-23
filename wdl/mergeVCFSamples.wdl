@@ -162,7 +162,7 @@ task mergeVCFs {
         if [ "~{recalculate_af}" = "true" ]; then
             # move merged VCF to temporary file so final output has same filename, regardless of recalculate_af
             mv ~{output_vcf_name} tmp_~{output_vcf_name}
-            bcftools +fill-tags tmp_~{output_vcf_name} -Oz -o ~{output_vcf_name} -- -t INFO/AF
+            bcftools +fill-tags tmp_~{output_vcf_name} -Oz -o ~{output_vcf_name} -- -t AF
         fi
         tabix ~{output_vcf_name}
     >>>
