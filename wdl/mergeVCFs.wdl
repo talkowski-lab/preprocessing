@@ -31,65 +31,6 @@ workflow mergeVCFs_workflow {
     }
 }
 
-task mergeVCFSamples {
-    input {
-        Array[File] vcf_files
-        String merged_filename
-        String sv_base_mini_docker
-        Boolean recalculate_af=false
-        RuntimeAttr? runtime_attr_override
-    }
-
-    Float input_size = size(vcf_files, "GB")
-    Float base_disk_gb = 10.0
-    Float input_disk_scale = 5.0
-
-    RuntimeAttr runtime_default = object {
-        mem_gb: 4,
-        disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
-        cpu_cores: 1,
-        preemptible_tries: 3,
-        max_retries: 1,
-        boot_disk_gb: 10
-    }
-
-    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-    Float memory = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
-    Int cpu_cores = select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    
-    runtime {
-        memory: "~{memory} GB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-        cpu: cpu_cores
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-        docker: sv_base_mini_docker
-        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    }
-
-    command <<<
-        set -euo pipefail
-        VCFS="~{write_lines(vcf_files)}"
-        cat $VCFS | awk -F '/' '{print $NF"\t"$0}' | sort -k1,1V | awk '{print $2}' > vcfs_sorted.list
-        for vcf in $(cat vcfs_sorted.list);
-        do
-            bcftools annotate -x ^FORMAT/GT,FORMAT/AD,FORMAT/DP,FORMAT/GQ,FORMAT/PL -Oz -o "$vcf"_stripped.vcf.gz $vcf
-            tabix "$vcf"_stripped.vcf.gz
-            echo "$vcf"_stripped.vcf.gz >> vcfs_sorted_stripped.list
-        done
-        bcftools merge -m none --force-samples --no-version -Oz --file-list vcfs_sorted_stripped.list --output ~{merged_filename}_merged.vcf.gz
-        
-        if [ "~{recalculate_af}" = "true" ]; then
-            # move merged VCF to temporary file so final output has same filename, regardless of recalculate_af
-            mv ~{merged_filename}_merged.vcf.gz ~{merged_filename}_merged_tmp.vcf.gz
-            bcftools +fill-tags ~{merged_filename}_merged_tmp.vcf.gz -Oz -o ~{merged_filename}_merged.vcf.gz -- -t INFO/AF
-    >>>
-
-    output {
-        File merged_vcf_file = "~{merged_filename}_merged.vcf.gz"
-    }
-}
-
 task mergeVCFs {
     input {
         Array[File] vcf_files
