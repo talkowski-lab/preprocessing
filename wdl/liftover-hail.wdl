@@ -105,7 +105,7 @@ task liftOverVCF {
     print(f"{n_rows_after}/{n_rows_before} remaining after liftover.")
     mt = mt.key_rows_by('locus','alleles')  
     hl.export_vcf(mt, output_filename, metadata=header, tabix=True)
-    EOF 
+    EOF
     python3 liftover.py ~{vcf_file} ~{cpu_cores} ~{memory} ~{genome_build} ~{output_filename}
     >>>
 
