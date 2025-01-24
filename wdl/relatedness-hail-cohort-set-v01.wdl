@@ -74,7 +74,7 @@ workflow RelatednessCohortSet {
     }
 
     if (samples_per_chunk==0) {
-        call relatedness_hail.Relatedness as Relatedness {
+        call relatednessHail.Relatedness as Relatedness {
             input:
             vep_vcf_files=[],
             somalier_vcf_file_=merged_vcf_file,
