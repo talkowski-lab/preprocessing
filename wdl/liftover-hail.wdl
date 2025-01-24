@@ -98,7 +98,8 @@ task liftOverVCF {
     rg38 = hl.get_reference('GRCh38')  
     rg37.add_liftover('gs://hail-common/references/grch37_to_grch38.over.chain.gz', rg38)  
 
-    mt = mt.key_rows_by().annotate_rows(locus=hl.liftover(mt.locus, 'GRCh38'))  
+    mt = mt.key_rows_by()
+    mt = mt.annotate_rows(locus=hl.liftover(mt.locus, 'GRCh38'))  
     n_rows_before = mt.count_rows()
     mt = mt.filter_rows(hl.is_defined(mt.locus))  
     n_rows_after = mt.count_rows()
