@@ -152,10 +152,11 @@ task subsetVCFgnomAD {
                         )
 
     mt = hl.import_vcf(vcf_uri, reference_genome=build, force_bgz=True, call_fields=[], array_elements_required=False)
+    header = hl.get_vcf_metadata(vcf_uri)
     gnomad_loading_ht = hl.read_table(gnomad_loading_ht)
     mt = mt.filter_rows(hl.is_defined(gnomad_loading_ht[mt.row_key]))
     output_filename = prefix + '_gnomad_pca_sites.vcf.bgz'
-    hl.export_vcf(mt, output_filename)
+    hl.export_vcf(mt, output_filename, metadata=header)
     EOF
 
     python3 filter_sites.py ~{vcf_uri} ~{cpu_cores} ~{memory} ~{prefix} ~{gnomad_loading_ht} ~{genome_build} > stdout
