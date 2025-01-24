@@ -24,7 +24,7 @@ workflow AncestryInferenceCohortSet {
         File gnomad_rf_onnx
         File pop_labels_tsv
         String gnomad_loading_ht
-        String infer_ancestry_script
+        String infer_ancestry_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_infer_ancestry.py"
 
         String cohort_set_id
         String hail_docker

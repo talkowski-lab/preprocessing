@@ -22,9 +22,9 @@ workflow Relatedness {
         File bed_file
         Int samples_per_chunk
         String cohort_prefix
-        String relatedness_qc_script
-        String plot_relatedness_script
-        String sex_qc_script
+        String relatedness_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_relatedness_check.py"
+        String plot_relatedness_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_relatedness_plot.py"
+        String sex_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_impute_sex.py"
         String sv_base_mini_docker
         String hail_docker
         String bucket_id
