@@ -2,7 +2,7 @@ version 1.0
 
 import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/mergeVCFs.wdl" as mergeVCFs
 import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/helpers.wdl" as helpers
-import "relatedness-hail.wdl" as relatednessHail
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/relatedness-hail-v01.wdl" as relatednessHail
 
 struct RuntimeAttr {
     Float? mem_gb

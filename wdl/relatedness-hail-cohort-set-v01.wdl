@@ -1,7 +1,7 @@
 version 1.0
 
-import "relatedness-hail.wdl" as relatedness_hail
-import "relatedness-hail-subset-samples.wdl" as relatedness_hail_subset_samples
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/relatedness-hail-v01.wdl" as relatednessHail
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/relatedness-hail-subset-samples-v01.wdl" as relatednessHailSubsetSamples
 import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/mergeVCFSamples.wdl" as mergeVCFs
 
 struct RuntimeAttr {
@@ -100,7 +100,7 @@ workflow RelatednessCohortSet {
     }
 
     if (samples_per_chunk>0) {
-        call relatedness_hail_subset_samples.Relatedness as Relatedness_subsetSamples {
+        call relatednessHailSubsetSamples.Relatedness as Relatedness_subsetSamples {
             input:
             vep_vcf_files=[],
             somalier_vcf_file_=merged_vcf_file,

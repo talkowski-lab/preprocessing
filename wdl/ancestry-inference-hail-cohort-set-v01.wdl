@@ -2,7 +2,7 @@ version 1.0
 
 import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/mergeVCFs.wdl" as mergeVCFs
 import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/helpers.wdl" as helpers
-import "ancestry-inference-hail.wdl" as AncestryInference
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/ancestry-inference-hail-v01.wdl" as AncestryInference
 
 struct RuntimeAttr {
     Float? mem_gb
