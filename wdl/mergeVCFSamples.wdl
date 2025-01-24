@@ -118,7 +118,7 @@ task mergeVCFs {
         Array[File] vcf_files
         String output_vcf_name
         String sv_base_mini_docker
-        Boolean recalculate_af
+        Boolean recalculate_af=false
         RuntimeAttr? runtime_attr_override
     }
 
