@@ -1,3 +1,11 @@
+###
+## CHANGE LOG:
+'''
+1/28/2025:
+- added filter_entries_before parameter
+'''
+###
+
 import datetime
 import pandas as pd
 import hail as hl
@@ -24,6 +32,7 @@ cores = sys.argv[9]
 mem = int(np.floor(float(sys.argv[10])))
 use_gnomad_rf = ast.literal_eval(sys.argv[11].capitalize())
 build = sys.argv[12]
+filter_entries_before = ast.literal_eval(sys.argv[13].capitalize())
 
 hl.init(min_block_size=128, 
         local=f"local[*]", 
@@ -51,7 +60,9 @@ pop_labels_ht = pop_labels_ht.filter(pop_labels_ht.SuperPop!='OCE')
 gnomad_mt = gnomad_mt.semi_join_cols(pop_labels_ht)
 
 # Filter the MT to high quality genotypes (GQ >= 20; DP >= 10; and AB >= 0.2 for het calls)
-mt = filter_to_adj(mt)
+# NEW 1/28/2025: added filter_entries_before parameter
+if filter_entries_before:
+    mt = filter_to_adj(mt)
 common_entry_fields = [x for x in list(np.intersect1d(list(gnomad_mt.entry), list(mt.entry))) if x!='PGT']
 mt = mt.select_entries(*common_entry_fields).union_cols(gnomad_mt.select_entries(*common_entry_fields), row_join_type='inner')
 

@@ -20,7 +20,7 @@ workflow AncestryInference {
         File gnomad_rf_onnx
         File pop_labels_tsv
         String gnomad_loading_ht
-        String infer_ancestry_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_infer_ancestry.py"
+        String infer_ancestry_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_infer_ancestry_v0.1.py"
 
         String cohort_prefix
         String hail_docker
@@ -31,6 +31,7 @@ workflow AncestryInference {
 
         Boolean infer_ancestry=true
         Boolean use_gnomad_rf=false
+        Boolean filter_entries_before=true
 
         String genome_build='GRCh38'
 
@@ -76,6 +77,7 @@ workflow AncestryInference {
                 num_pcs=num_pcs,
                 min_prob=min_prob,
                 use_gnomad_rf=use_gnomad_rf,
+                filter_entries_before=filter_entries_before,
                 genome_build=genome_build,
                 runtime_attr_override=runtime_attr_infer_ancestry
         }
@@ -181,6 +183,7 @@ task inferAncestry {
         Int num_pcs
         Float min_prob
         Boolean use_gnomad_rf
+        Boolean filter_entries_before
         String genome_build
         RuntimeAttr? runtime_attr_override
     }
@@ -215,7 +218,8 @@ task inferAncestry {
     command <<<
     curl ~{infer_ancestry_script} > infer_ancestry.py
     python3 infer_ancestry.py ~{vcf_uri} ~{gnomad_vcf_uri} ~{gnomad_loading_ht} ~{gnomad_rf_onnx} \
-        ~{pop_labels_tsv} ~{num_pcs} ~{min_prob} ~{cohort_prefix} ~{cpu_cores} ~{memory} ~{use_gnomad_rf} ~{genome_build} > stdout
+        ~{pop_labels_tsv} ~{num_pcs} ~{min_prob} ~{cohort_prefix} ~{cpu_cores} ~{memory} \
+        ~{use_gnomad_rf} ~{genome_build} ~{filter_entries_before} > stdout
     >>>
 
     output {

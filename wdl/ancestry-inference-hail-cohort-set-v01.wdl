@@ -24,7 +24,7 @@ workflow AncestryInferenceCohortSet {
         File gnomad_rf_onnx
         File pop_labels_tsv
         String gnomad_loading_ht
-        String infer_ancestry_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_infer_ancestry.py"
+        String infer_ancestry_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_infer_ancestry_v0.1.py"
 
         String cohort_set_id
         String hail_docker
@@ -35,6 +35,7 @@ workflow AncestryInferenceCohortSet {
 
         Boolean infer_ancestry=true
         Boolean use_gnomad_rf=false
+        Boolean filter_entries_before=true
 
         String genome_build='GRCh38'
 
@@ -69,6 +70,7 @@ workflow AncestryInferenceCohortSet {
                 num_pcs=num_pcs,
                 min_prob=min_prob,
                 use_gnomad_rf=use_gnomad_rf,
+                filter_entries_before=filter_entries_before,
                 genome_build=genome_build,
                 runtime_attr_override=runtime_attr_infer_ancestry
         }
