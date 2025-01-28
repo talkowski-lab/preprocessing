@@ -2,6 +2,7 @@ version 1.0
 
 import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/mergeVCFs.wdl" as mergeVCFs
 import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/helpers.wdl" as helpers
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/ancestry-inference-hail-v01.wdl" as AncestryInference
 
 struct RuntimeAttr {
     Float? mem_gb
@@ -47,7 +48,7 @@ workflow AncestryInference {
                     mt_uri=mt_uri,
                     hail_docker=hail_docker
             }
-            call subsetVCFgnomAD {
+            call subsetMTgnomAD {
                 input:
                 mt_uri=mt_uri,
                 input_size=getInputMTSize.mt_size,
@@ -60,7 +61,7 @@ workflow AncestryInference {
 
         call mergeVCFs.mergeVCFs as mergeVCFs {
             input:
-            vcf_files=subsetVCFgnomAD.subset_vcf,
+            vcf_files=subsetMTgnomAD.subset_vcf,
             sv_base_mini_docker=sv_base_mini_docker,
             cohort_prefix=cohort_prefix+'_gnomad_pca_sites',
             runtime_attr_override=runtime_attr_merge_vcfs
@@ -70,7 +71,7 @@ workflow AncestryInference {
     File vcf_uri = select_first([ancestry_vcf_file_, mergeVCFs.merged_vcf_file])
 
     if (infer_ancestry) {
-        call inferAncestry {
+        call AncestryInference.inferAncestry as inferAncestry {
             input:
                 vcf_uri=vcf_uri,
                 gnomad_vcf_uri=gnomad_vcf_uri,
@@ -95,7 +96,7 @@ workflow AncestryInference {
     }
 }
 
-task subsetVCFgnomAD {
+task subsetMTgnomAD {
     input {
         String mt_uri
         String gnomad_loading_ht
@@ -172,63 +173,5 @@ task subsetVCFgnomAD {
 
     output {
         File subset_vcf = prefix + '_gnomad_pca_sites.vcf.bgz'
-    }
-}
-
-task inferAncestry {
-    input {
-        File vcf_uri
-        File gnomad_vcf_uri
-        File gnomad_rf_onnx
-        File pop_labels_tsv
-        String cohort_prefix
-        String gnomad_loading_ht
-        String infer_ancestry_script
-        String hail_docker
-        Int num_pcs
-        Float min_prob
-        Boolean use_gnomad_rf
-        Boolean filter_entries_before
-        String genome_build
-        RuntimeAttr? runtime_attr_override
-    }
-
-    Float input_size = size([vcf_uri, gnomad_vcf_uri], "GB")
-    Float base_disk_gb = 10.0
-    Float input_disk_scale = 5.0
-
-    RuntimeAttr runtime_default = object {
-        mem_gb: 4,
-        disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
-        cpu_cores: 1,
-        preemptible_tries: 3,
-        max_retries: 1,
-        boot_disk_gb: 10
-    }
-
-    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-    Float memory = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
-    Int cpu_cores = select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    
-    runtime {
-        memory: "~{memory} GB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-        cpu: cpu_cores
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-        docker: hail_docker
-        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    }
-
-    command <<<
-    curl ~{infer_ancestry_script} > infer_ancestry.py
-    python3 infer_ancestry.py ~{vcf_uri} ~{gnomad_vcf_uri} ~{gnomad_loading_ht} ~{gnomad_rf_onnx} \
-        ~{pop_labels_tsv} ~{num_pcs} ~{min_prob} ~{cohort_prefix} ~{cpu_cores} ~{memory} ~{use_gnomad_rf} \
-        ~{genome_build} ~{filter_entries_before} > stdout
-    >>>
-
-    output {
-        File ancestry_tsv = cohort_prefix + '_inferred_ancestry.tsv'
-        File ancestry_plot = cohort_prefix + '_inferred_ancestry.png'
     }
 }
