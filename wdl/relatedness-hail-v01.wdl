@@ -17,7 +17,6 @@ workflow Relatedness {
         Array[File]? vep_vcf_files
         File? somalier_vcf_file_
         File ped_uri
-        File sites_uri
         File bed_file
         String cohort_prefix
         String relatedness_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_relatedness_check_v0.1.py"
@@ -67,7 +66,6 @@ workflow Relatedness {
     call imputeSex {
         input:
         vcf_uri=merged_vcf_file,
-        sites_uri=sites_uri,
         ped_uri=ped_uri,
         cohort_prefix=cohort_prefix,
         sex_qc_script=sex_qc_script,
@@ -80,7 +78,6 @@ workflow Relatedness {
     call checkRelatedness {
         input:
         vcf_uri=merged_vcf_file,
-        sites_uri=sites_uri,
         ped_uri=ped_uri,
         cohort_prefix=cohort_prefix,
         relatedness_qc_script=relatedness_qc_script,
@@ -116,7 +113,6 @@ task imputeSex {
     input {
         File vcf_uri
         File ped_uri
-        File sites_uri
         String cohort_prefix
         String sex_qc_script
         String hail_docker
@@ -154,7 +150,7 @@ task imputeSex {
 
     command <<<
         curl ~{sex_qc_script} > impute_sex.py
-        python3 impute_sex.py ~{vcf_uri} ~{sites_uri} ~{cohort_prefix} ~{ped_uri} ~{cpu_cores} ~{memory} ~{genome_build} ~{split_multi}
+        python3 impute_sex.py ~{vcf_uri} ~{cohort_prefix} ~{ped_uri} ~{cpu_cores} ~{memory} ~{genome_build} ~{split_multi}
     >>>
 
     output {
@@ -167,7 +163,6 @@ task checkRelatedness {
     input {
         File vcf_uri
         File ped_uri
-        File sites_uri
         String cohort_prefix
         String relatedness_qc_script
         String hail_docker
@@ -207,7 +202,7 @@ task checkRelatedness {
     command <<<
         set -eou pipefail
         curl ~{relatedness_qc_script} > check_relatedness.py
-        python3 check_relatedness.py ~{vcf_uri} ~{sites_uri} ~{cohort_prefix} ~{ped_uri} ~{cpu_cores} ~{memory} \
+        python3 check_relatedness.py ~{vcf_uri} ~{cohort_prefix} ~{ped_uri} ~{cpu_cores} ~{memory} \
         ~{bucket_id} ~{score_table} ~{genome_build} > stdout
     >>>
 

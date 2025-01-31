@@ -18,7 +18,6 @@ workflow Relatedness {
         Array[File]? vep_vcf_files
         File? somalier_vcf_file_
         File ped_uri
-        File sites_uri
         File bed_file
         Int samples_per_chunk
         String cohort_prefix
@@ -72,7 +71,6 @@ workflow Relatedness {
     call relatednessHail.imputeSex as imputeSex {
         input:
         vcf_uri=merged_vcf_file,
-        sites_uri=sites_uri,
         ped_uri=ped_uri,
         cohort_prefix=cohort_prefix,
         sex_qc_script=sex_qc_script,
@@ -112,7 +110,6 @@ workflow Relatedness {
         call relatednessHail.checkRelatedness as checkRelatedness {
             input:
             vcf_uri=subsetVCFSamples.vcf_subset,
-            sites_uri=sites_uri,
             ped_uri=ped_uri,
             cohort_prefix=cohort_prefix,
             relatedness_qc_script=relatedness_qc_script,

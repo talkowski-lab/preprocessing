@@ -19,7 +19,6 @@ workflow RelatednessCohortSet {
         File? somalier_vcf_file_
         Array[File] ped_uri
         Array[String] cohort_prefixes
-        File sites_uri
         File bed_file
         String merged_filename  # no file extension
         String relatedness_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_relatedness_check_v0.1.py"
@@ -79,7 +78,6 @@ workflow RelatednessCohortSet {
             vep_vcf_files=[],
             somalier_vcf_file_=merged_vcf_file,
             ped_uri=mergePeds.merged_ped_file,
-            sites_uri=sites_uri,
             bed_file=bed_file,
             cohort_prefix=merged_filename,
             relatedness_qc_script=relatedness_qc_script,
@@ -105,7 +103,6 @@ workflow RelatednessCohortSet {
             vep_vcf_files=[],
             somalier_vcf_file_=merged_vcf_file,
             ped_uri=mergePeds.merged_ped_file,
-            sites_uri=sites_uri,
             bed_file=bed_file,
             samples_per_chunk=samples_per_chunk,
             cohort_prefix=merged_filename,
