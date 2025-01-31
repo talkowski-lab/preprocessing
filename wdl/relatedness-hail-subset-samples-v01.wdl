@@ -19,6 +19,8 @@ workflow Relatedness {
         File? somalier_vcf_file_
         File ped_uri
         File bed_file
+        File empty_file  # to output if impute_sex=false
+
         Int samples_per_chunk
         String cohort_prefix
         String relatedness_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_relatedness_check_v0.1.py"
@@ -30,6 +32,7 @@ workflow Relatedness {
         String genome_build
         Boolean sort_after_merge=false
         Boolean split_multi=true
+        Boolean impute_sex=true
         Int chunk_size=100000
         RuntimeAttr? runtime_attr_subset_vcfs
         RuntimeAttr? runtime_attr_merge_vcfs
@@ -68,16 +71,18 @@ workflow Relatedness {
     }
     File merged_vcf_file = select_first([somalier_vcf_file_, mergeVCFs.merged_vcf_file])
 
-    call relatednessHail.imputeSex as imputeSex {
-        input:
-        vcf_uri=merged_vcf_file,
-        ped_uri=ped_uri,
-        cohort_prefix=cohort_prefix,
-        sex_qc_script=sex_qc_script,
-        hail_docker=hail_docker,
-        genome_build=genome_build,
-        split_multi=split_multi,
-        runtime_attr_override=runtime_attr_impute_sex
+    if (impute_sex) {
+        call relatednessHail.imputeSex as imputeSex {
+            input:
+            vcf_uri=merged_vcf_file,
+            ped_uri=ped_uri,
+            cohort_prefix=cohort_prefix,
+            sex_qc_script=sex_qc_script,
+            hail_docker=hail_docker,
+            genome_build=genome_build,
+            split_multi=split_multi,
+            runtime_attr_override=runtime_attr_impute_sex
+        }
     }
 
     call helpers.splitSamples as splitSamples {
@@ -162,8 +167,8 @@ workflow Relatedness {
 
     output {
         File somalier_vcf_file = merged_vcf_file
-        File sex_qc_plots = imputeSex.sex_qc_plots
-        File ped_sex_qc = imputeSex.ped_sex_qc
+        File sex_qc_plots = select_first([imputeSex.sex_qc_plots, empty_file])
+        File ped_sex_qc = select_first([imputeSex.ped_sex_qc, empty_file])
         File relatedness_qc = removeDuplicates.relatedness_qc_unique
         File kinship_tsv = removeDuplicates.kinship_tsv_unique
         File relatedness_plot = plotRelatedness.relatedness_plot
