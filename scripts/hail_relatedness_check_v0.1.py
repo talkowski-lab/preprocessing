@@ -1,3 +1,13 @@
+###
+# DESCRIPTION: TODO
+
+## CHANGE LOG:
+'''
+1/31/2025:
+- added split_multi parameter
+'''
+###
+
 import pandas as pd
 import numpy as np
 import hail as hl
@@ -19,6 +29,7 @@ mem = int(np.floor(float(sys.argv[6])))
 bucket_id = sys.argv[7]
 score_table = sys.argv[8]
 genome_build = sys.argv[9]
+split_multi = ast.literal_eval(sys.argv[10].capitalize())
 
 hl.init(min_block_size=128, 
         local=f"local[*]", 
@@ -54,7 +65,8 @@ def split_multi_ssc(mt):
     return mt
 
 mt = hl.import_vcf(vcf_uri, reference_genome=genome_build, force_bgz=True, call_fields=[], array_elements_required=False)
-mt = split_multi_ssc(mt)
+if split_multi:
+    mt = split_multi_ssc(mt)
 
 # somalier sites
 som_mt = hl.import_vcf(somalier_vcf, reference_genome=genome_build, force_bgz=True, call_fields=[], array_elements_required=False)

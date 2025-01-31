@@ -27,8 +27,8 @@ workflow Relatedness {
         String bucket_id
         String genome_build
         Int chunk_size=0
-        Boolean split_multi=true
         Boolean sort_after_merge=false
+        Boolean split_multi=true
         RuntimeAttr? runtime_attr_subset_vcfs
         RuntimeAttr? runtime_attr_merge_vcfs
         RuntimeAttr? runtime_attr_impute_sex
@@ -169,6 +169,7 @@ task checkRelatedness {
         String bucket_id
         String genome_build
         String score_table=false
+        Boolean split_multi=true
         RuntimeAttr? runtime_attr_override
     }
 
@@ -203,7 +204,7 @@ task checkRelatedness {
         set -eou pipefail
         curl ~{relatedness_qc_script} > check_relatedness.py
         python3 check_relatedness.py ~{vcf_uri} ~{cohort_prefix} ~{ped_uri} ~{cpu_cores} ~{memory} \
-        ~{bucket_id} ~{score_table} ~{genome_build} > stdout
+        ~{bucket_id} ~{score_table} ~{genome_build} ~{split_multi} > stdout
     >>>
 
     output {

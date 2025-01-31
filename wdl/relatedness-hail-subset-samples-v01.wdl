@@ -117,6 +117,7 @@ workflow Relatedness {
             bucket_id=bucket_id,
             score_table=HailPCA.score_table,
             genome_build=genome_build,
+            split_multi=split_multi,
             runtime_attr_override=runtime_attr_check_relatedness
         }
     }
