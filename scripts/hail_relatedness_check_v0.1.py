@@ -5,6 +5,7 @@
 '''
 1/31/2025:
 - added split_multi parameter
+- removed somalier_vcf input (same as sites_uri in the WDL)
 '''
 ###
 
@@ -21,15 +22,14 @@ from gnomad.resources.grch38 import gnomad
 from gnomad.sample_qc import relatedness
 
 vcf_uri = sys.argv[1]
-somalier_vcf = sys.argv[2]
-cohort_prefix = sys.argv[3]
-ped_uri = sys.argv[4]
-cores = sys.argv[5]  # string
-mem = int(np.floor(float(sys.argv[6])))
-bucket_id = sys.argv[7]
-score_table = sys.argv[8]
-genome_build = sys.argv[9]
-split_multi = ast.literal_eval(sys.argv[10].capitalize())
+cohort_prefix = sys.argv[2]
+ped_uri = sys.argv[3]
+cores = sys.argv[4]  # string
+mem = int(np.floor(float(sys.argv[5])))
+bucket_id = sys.argv[6]
+score_table = sys.argv[7]
+genome_build = sys.argv[8]
+split_multi = ast.literal_eval(sys.argv[9].capitalize())
 
 hl.init(min_block_size=128, 
         local=f"local[*]", 
@@ -67,10 +67,6 @@ def split_multi_ssc(mt):
 mt = hl.import_vcf(vcf_uri, reference_genome=genome_build, force_bgz=True, call_fields=[], array_elements_required=False)
 if split_multi:
     mt = split_multi_ssc(mt)
-
-# somalier sites
-som_mt = hl.import_vcf(somalier_vcf, reference_genome=genome_build, force_bgz=True, call_fields=[], array_elements_required=False)
-mt = mt.semi_join_rows(som_mt.rows())
 
 if score_table=='false':
     rel = hl.pc_relate(mt.GT, 0.01, k=10)

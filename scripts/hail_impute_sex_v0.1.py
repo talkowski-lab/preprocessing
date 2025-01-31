@@ -1,3 +1,13 @@
+###
+# DESCRIPTION: TODO
+
+## CHANGE LOG:
+'''
+1/31/2025:
+- removed somalier_vcf input (same as sites_uri in the WDL)
+'''
+###
+
 import pandas as pd
 import numpy as np
 import hail as hl
@@ -8,13 +18,12 @@ import os
 import ast
 
 vcf_uri = sys.argv[1]
-somalier_vcf = sys.argv[2]
-cohort_prefix = sys.argv[3]
-ped_uri = sys.argv[4]
-cores = sys.argv[5]  # string
-mem = int(np.floor(float(sys.argv[6])))
-genome_build = sys.argv[7]
-split_multi = ast.literal_eval(sys.argv[8].capitalize())
+cohort_prefix = sys.argv[2]
+ped_uri = sys.argv[3]
+cores = sys.argv[4]  # string
+mem = int(np.floor(float(sys.argv[5])))
+genome_build = sys.argv[6]
+split_multi = ast.literal_eval(sys.argv[7].capitalize())
 
 hl.init(min_block_size=128, 
         local=f"local[*]", 
@@ -52,10 +61,6 @@ def split_multi_ssc(mt):
 mt = hl.import_vcf(vcf_uri, reference_genome=genome_build, force_bgz=True, call_fields=[], array_elements_required=False)
 if split_multi:
     mt = split_multi_ssc(mt)
-
-# somalier sites
-som_mt = hl.import_vcf(somalier_vcf, reference_genome=genome_build, force_bgz=True, call_fields=[], array_elements_required=False)
-mt = mt.semi_join_rows(som_mt.rows())
 
 mt = mt.annotate_entries(AB=mt.AD[1]/hl.sum(mt.AD))
 mt = mt.annotate_entries(GT=hl.or_missing(mt.DP!=0, mt.GT))
