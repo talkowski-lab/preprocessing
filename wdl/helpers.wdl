@@ -258,9 +258,12 @@ task splitSamples {
         samples_per_chunk = int(sys.argv[2])
 
         samples = sorted(pd.read_csv(f"{cohort_prefix}_samples.txt", header=None)[0].tolist())
+        
+        # Split samples into chunks of the specified size
         n = samples_per_chunk  # number of samples in each chunk
         chunks = [samples[i * n:(i + 1) * n] for i in range((len(samples) + n - 1) // n )]  
         
+        # Combine each chunk with every other chunk (excluding itself)
         shard_samples = []
         for i, chunk1 in enumerate(chunks):
             for chunk2 in chunks[i+1:]:
