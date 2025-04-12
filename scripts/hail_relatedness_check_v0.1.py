@@ -69,7 +69,7 @@ if split_multi:
     mt = split_multi_ssc(mt)
 
 if score_table=='false':
-    rel = hl.pc_relate(mt.GT, 0.01, k=2)
+    rel = hl.pc_relate(mt.GT, 0.01, k=10)
 else:
     score_table_som = hl.read_table(score_table)
     mt = mt.annotate_cols(scores=score_table_som[mt.s].scores)
