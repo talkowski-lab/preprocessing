@@ -92,17 +92,21 @@ rel = ibd_ht.annotate(phi=king_ht[ibd_ht.key].phi).flatten().key_by('i','j')
 # duplicate/MZ twin, 1st-degree, 2nd-degree, and 3rd-degree relationships respectively. 
 
 # can't distinguish between parent-child and siblings just using kinship coefficient (fine for now?)
-king_cutoffs = {'parent-child': [0.177, 0.354],  
-               'second degree relatives': [0.0884, 0.177],
-               'duplicate/twins': [0.354, 1],
-               'unrelated': [0, 0.0884]}
+# king_cutoffs = {'parent-child': [0.177, 0.354],  
+#                'second degree relatives': [0.0884, 0.177],
+#                'duplicate/twins': [0.354, 1],
+#                'unrelated': [0, 0.0884]}
 
-rel = rel.annotate(relationship=hl.case()
-                 .when(rel.phi >= king_cutoffs['duplicate/twins'][0], 'duplicate/twins')
-                 .when(rel.phi >= king_cutoffs['parent-child'][0], 'parent-child')
-                 .when(rel.phi >= king_cutoffs['second degree relatives'][0], 'second degree relatives')
-                 .when(rel.phi >= king_cutoffs['unrelated'][0], 'unrelated')
-                 .or_missing())
+# rel = rel.annotate(relationship=hl.case()
+#                  .when(rel.phi >= king_cutoffs['duplicate/twins'][0], 'duplicate/twins')
+#                  .when(rel.phi >= king_cutoffs['parent-child'][0], 'parent-child')
+#                  .when(rel.phi >= king_cutoffs['second degree relatives'][0], 'second degree relatives')
+#                  .when(rel.phi >= king_cutoffs['unrelated'][0], 'unrelated')
+#                  .or_missing())
+
+# ANNOTATE RELATIONSHIP USING PC-RELATE CUTOFFS
+rel = rel.annotate(relationship=relatedness.get_relationship_expr(kin_expr = rel.phi, ibd0_expr = rel['ibd.Z0'], 
+                                                            ibd1_expr = rel['ibd.Z1'], ibd2_expr = rel['ibd.Z2']))
 
 ped = pd.read_csv(ped_uri, sep='\t').iloc[:, :6]
 ped.columns = ['family_id', 'sample_id', 'paternal_id', 'maternal_id', 'sex', 'phenotype']
