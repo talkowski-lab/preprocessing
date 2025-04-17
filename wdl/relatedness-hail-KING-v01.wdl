@@ -2,6 +2,7 @@ version 1.0
 
 import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/mergeVCFs.wdl" as mergeVCFs
 import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/helpers.wdl" as helpers
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/relatedness-hail-v01.wdl" as relatednessHail
 
 struct RuntimeAttr {
     Float? mem_gb
@@ -20,11 +21,13 @@ workflow Relatedness {
         File bed_file
         String cohort_prefix
         String relatedness_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_relatedness_check_KING_v0.1.py"
-        String plot_relatedness_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_relatedness_plot_KING_v0.1.py"
+        String plot_relatedness_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_relatedness_plot_v0.1.py"
         String sv_base_mini_docker
         String hail_docker
         String bucket_id
         String genome_build
+        String x_metric='ibs0'
+        String y_metric='phi'
         Int chunk_size=0
         Boolean sort_after_merge=false
         Boolean split_multi=true
@@ -62,7 +65,7 @@ workflow Relatedness {
     }
     File merged_vcf_file = select_first([somalier_vcf_file_, mergeVCFs.merged_vcf_file])
 
-    call checkRelatedness {
+    call relatednessHail.checkRelatedness {
         input:
         vcf_uri=merged_vcf_file,
         ped_uri=ped_uri,
@@ -74,13 +77,15 @@ workflow Relatedness {
         runtime_attr_override=runtime_attr_check_relatedness
     }
 
-    call plotRelatedness {
+    call relatednessHail.plotRelatedness {
         input:
         kinship_tsv=checkRelatedness.kinship_tsv,
         ped_uri=ped_uri,
         cohort_prefix=cohort_prefix,
         plot_relatedness_script=plot_relatedness_script,
         hail_docker=hail_docker,
+        x_metric=x_metric,
+        y_metric=y_metric,
         chunk_size=chunk_size,
         runtime_attr_override=runtime_attr_plot_relatedness
     }
@@ -88,109 +93,6 @@ workflow Relatedness {
     output {
         File somalier_vcf_file = merged_vcf_file
         File relatedness_qc = checkRelatedness.relatedness_qc
-        File kinship_tsv = checkRelatedness.kinship_tsv
         File relatedness_plot = plotRelatedness.relatedness_plot
-    }
-}
-
-task checkRelatedness {
-    input {
-        File vcf_uri
-        File ped_uri
-        String cohort_prefix
-        String relatedness_qc_script
-        String hail_docker
-        String bucket_id
-        String genome_build
-        Boolean split_multi=true
-        RuntimeAttr? runtime_attr_override
-    }
-
-    Float input_size = size(vcf_uri, "GB")
-    Float base_disk_gb = 10.0
-    Float input_disk_scale = 10.0
-
-    RuntimeAttr runtime_default = object {
-        mem_gb: 4,
-        disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
-        cpu_cores: 1,
-        preemptible_tries: 3,
-        max_retries: 1,
-        boot_disk_gb: 10
-    }
-
-    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-    Float memory = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
-    Int cpu_cores = select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    
-    runtime {
-        memory: "~{memory} GB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-        cpu: cpu_cores
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-        docker: hail_docker
-        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    }
-
-    command <<<
-        set -eou pipefail
-        curl ~{relatedness_qc_script} > check_relatedness.py
-        python3 check_relatedness.py ~{vcf_uri} ~{cohort_prefix} ~{ped_uri} ~{cpu_cores} ~{memory} \
-        ~{bucket_id} ~{genome_build} ~{split_multi} > stdout
-    >>>
-
-    output {
-        File relatedness_qc = cohort_prefix + "_relatedness_qc.ped"
-        File kinship_tsv = cohort_prefix + "_kinship.tsv.gz"
-    }
-}
-
-task plotRelatedness {
-    input {
-        File kinship_tsv
-        File ped_uri
-        String cohort_prefix
-        String plot_relatedness_script
-        String hail_docker
-        Int chunk_size
-        RuntimeAttr? runtime_attr_override
-    }
-
-    Float input_size = size([kinship_tsv, ped_uri], "GB")
-    Float base_disk_gb = 10.0
-    Float input_disk_scale = 5.0
-
-    RuntimeAttr runtime_default = object {
-        mem_gb: 4,
-        disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
-        cpu_cores: 1,
-        preemptible_tries: 3,
-        max_retries: 1,
-        boot_disk_gb: 10
-    }
-
-    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-    Float memory = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
-    Int cpu_cores = select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    
-    runtime {
-        memory: "~{memory} GB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-        cpu: cpu_cores
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-        docker: hail_docker
-        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    }
-
-    command <<<
-        set -eou pipefail
-        curl ~{plot_relatedness_script} > plot_relatedness.py
-        python3 plot_relatedness.py ~{kinship_tsv} ~{cohort_prefix} ~{ped_uri} ~{chunk_size} > stdout
-    >>>
-
-    output {
-        File relatedness_plot = "~{cohort_prefix}_relatedness_ibd0_kinship.png"
     }
 }

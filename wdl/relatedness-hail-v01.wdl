@@ -264,6 +264,6 @@ task plotRelatedness {
     >>>
 
     output {
-        File relatedness_plot = "~{cohort_prefix}_relatedness_ibd0_kinship.png"
+        File relatedness_plot = "~{cohort_prefix}_relatedness_~{x_metric}_~{y_metric}.png"
     }
 }
