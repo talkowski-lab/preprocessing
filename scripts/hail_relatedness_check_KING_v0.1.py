@@ -27,8 +27,9 @@ ped_uri = sys.argv[3]
 cores = sys.argv[4]  # string
 mem = int(np.floor(float(sys.argv[5])))
 bucket_id = sys.argv[6]
-genome_build = sys.argv[7]
-split_multi = ast.literal_eval(sys.argv[8].capitalize())
+score_table = sys.argv[7]  # TODO: REMOVE THIS OUTPUT (only here for compatibility with PC-Relate WDL task)
+genome_build = sys.argv[8]
+split_multi = ast.literal_eval(sys.argv[9].capitalize())
 
 hl.init(min_block_size=128, 
         local=f"local[*]", 
