@@ -30,6 +30,7 @@ workflow RelatednessCohortSet {
         String genome_build
         String x_metric='ibd0'
         String y_metric='kin'
+        String kinship_field='kin'  # for sorting in removeDuplicates
         Int chunk_size=100000
         Int samples_per_chunk=0
         Boolean sort_after_merge=false
@@ -121,6 +122,7 @@ workflow RelatednessCohortSet {
             genome_build=genome_build,
             x_metric=x_metric,
             y_metric=y_metric,
+            kinship_field=kinship_field,
             chunk_size=chunk_size,
             sort_after_merge=sort_after_merge,
             split_multi=split_multi,

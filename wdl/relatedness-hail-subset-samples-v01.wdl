@@ -32,6 +32,7 @@ workflow Relatedness {
         String genome_build
         String x_metric='ibd0'
         String y_metric='kin'        
+        String kinship_field='kin'  # for sorting in removeDuplicates
         Boolean sort_after_merge=false
         Boolean split_multi=true
         Boolean impute_sex=true
@@ -153,6 +154,7 @@ workflow Relatedness {
         relatedness_qc=mergeRelatednessQC.merged_tsv,
         hail_docker=hail_docker,
         chunk_size=chunk_size,
+        kinship_field=kinship_field,
         runtime_attr_override=runtime_attr_remove_duplicates
     }
 
@@ -258,6 +260,7 @@ task removeDuplicates {
         File kinship_tsv
         File relatedness_qc
         String hail_docker
+        String kinship_field
         Int chunk_size
         RuntimeAttr? runtime_attr_override
     }
@@ -299,6 +302,7 @@ task removeDuplicates {
     kinship_tsv = sys.argv[1]
     relatedness_qc = sys.argv[2]
     chunk_size = int(sys.argv[3])
+    kinship_field = sys.argv[4]
 
     chunks = []
     for chunk in pd.read_csv(kinship_tsv, sep='\t', chunksize=chunk_size):
@@ -311,25 +315,25 @@ task removeDuplicates {
     related_kin = kinship_df[kinship_df.ped_relationship!='unrelated']
     kinship_df = pd.concat([
                             unrelated_kin.groupby('pair').sample(1),
-                            related_kin.sort_values(['ped_rel_rank','inferred_rel_rank','kin'], ascending=False).drop_duplicates('pair')
+                            related_kin.sort_values(['ped_rel_rank','inferred_rel_rank',kinship_field], ascending=False).drop_duplicates('pair')
                            ])
     kinship_df = kinship_df.drop(['ped_rel_rank','inferred_rel_rank'], axis=1)
 
     rel_df = pd.read_csv(relatedness_qc, sep='\t')
 
     rel_df['role_rank'] = rel_df.role.map({'Proband': 1, 'Mother': 1, 'Father': 1, 'Singleton': 0, 'Unknown': 0})
-    rel_df['avg_parent_kin'] = rel_df[['mother_kin','father_kin']].replace({np.nan:0}).mean(axis=1)
+    rel_df[f'avg_parent_{kinship_field}'] = rel_df[[f'mother_{kinship_field}',f'father_{kinship_field}']].replace({np.nan:0}).mean(axis=1)
     rel_df['mother_status_int'] = rel_df.mother_status.map({'parent-child': 5, 'ambiguous': 4, 'siblings': 3, 'second degree relatives': 2, 'duplicate/twins': 1, 'unrelated': 0, np.nan: -1})    
     rel_df['father_status_int'] = rel_df.father_status.map({'parent-child': 5, 'ambiguous': 4, 'siblings': 3, 'second degree relatives': 2, 'duplicate/twins': 1, 'unrelated': 0, np.nan: -1})    
     rel_df['parent_status'] = rel_df[['mother_status_int','father_status_int']].sum(axis=1)
-    rel_df = rel_df.sort_values(['role_rank','parent_status','avg_parent_kin'], ascending=False).drop_duplicates('sample_id')
-    rel_df = rel_df.drop(['role_rank','avg_parent_kin','parent_status','mother_status_int','father_status_int'], axis=1)
+    rel_df = rel_df.sort_values(['role_rank','parent_status',f'avg_parent_{kinship_field}'], ascending=False).drop_duplicates('sample_id')
+    rel_df = rel_df.drop(['role_rank',f'avg_parent_{kinship_field}','parent_status','mother_status_int','father_status_int'], axis=1)
 
     kinship_df.to_csv(os.path.basename(kinship_tsv), sep='\t', index=False)
     rel_df.to_csv(os.path.basename(relatedness_qc), sep='\t', index=False)
     EOF
 
-    python3 remove_duplicates.py ~{kinship_tsv} ~{relatedness_qc} ~{chunk_size} 
+    python3 remove_duplicates.py ~{kinship_tsv} ~{relatedness_qc} ~{chunk_size} ~{kinship_field}
     >>>
 
     output {
