@@ -76,6 +76,34 @@ ibd_ht = hl.identity_by_descent(mt)
 
 rel = ibd_ht.annotate(phi=king_ht[ibd_ht.key].phi).flatten().key_by('i','j')
 
+# ANNOTATE RELATIONSHIP FIELD USING KING HARD CUTOFFS
+# SOURCE 1: https://www.cog-genomics.org/plink/2.0/distance#king_coefs
+# Simple KING cutoffs for inferred relatedness
+# Note that KING kinship coefficients are scaled such that duplicate samples have kinship 0.5, not 1. 
+# First-degree relations (parent-child, full siblings) correspond to ~0.25, 
+# second-degree relations correspond to ~0.125, etc. 
+# It is conventional to use a cutoff of ~0.354 (the geometric mean of 0.5 and 0.25) 
+# to screen for monozygotic twins and duplicate samples, ~0.177 to add first-degree relations, etc.
+
+# SOURCE 2: https://bioweb.pasteur.fr/docs/modules/king/1.4/#:~:text=Parameter%20%2D%2Drelated%20%2D%2Ddegree,be%20excluded%20from%20the%20output.
+# lose relatives can be inferred fairly reliably based on the estimated kinship coefficients 
+# as shown in the following simple algorithm: an estimated kinship coefficient range 
+# >0.354, [0.177, 0.354], [0.0884, 0.177] and [0.0442, 0.0884] corresponds to 
+# duplicate/MZ twin, 1st-degree, 2nd-degree, and 3rd-degree relationships respectively. 
+
+# can't distinguish between parent-child and siblings just using kinship coefficient (fine for now?)
+king_cutoffs = {'parent-child': [0.177, 0.354],  
+               'second degree relatives': [0.0884, 0.177],
+               'duplicate/twins': [0.354, 1],
+               'unrelated': [0, 0.0884]}
+
+rel = rel.annotate(relationship=hl.case()
+                 .when(rel.phi >= king_cutoffs['duplicate/twins'][0], 'duplicate/twins')
+                 .when(rel.phi >= king_cutoffs['parent-child'][0], 'parent-child')
+                 .when(rel.phi >= king_cutoffs['second degree relatives'][0], 'second degree relatives')
+                 .when(rel.phi >= king_cutoffs['unrelated'][0], 'unrelated')
+                 .or_missing())
+
 ped = pd.read_csv(ped_uri, sep='\t').iloc[:, :6]
 ped.columns = ['family_id', 'sample_id', 'paternal_id', 'maternal_id', 'sex', 'phenotype']
 ped.index = ped.sample_id
@@ -121,11 +149,13 @@ if not ped.empty:
     dad_temp2 = ped_ht.key_by('paternal_id','sample_id')
 
     all_dad_ht = dad_temp.join(rel.semi_join(dad_temp)).key_by().union(dad_temp2.join(rel.semi_join(dad_temp2)).key_by(), unify=True)
+    all_dad_ht = all_dad_ht.annotate(father_status=all_dad_ht.relationship).drop('relationship')
 
     mom_temp = ped_ht.key_by('sample_id','maternal_id')
     mom_temp2 = ped_ht.key_by('maternal_id','sample_id')
 
     all_mom_ht = mom_temp.join(rel.semi_join(mom_temp)).key_by().union(mom_temp2.join(rel.semi_join(mom_temp2)).key_by(), unify=True)
+    all_mom_ht = all_mom_ht.annotate(mother_status=all_mom_ht.relationship).drop('relationship')
 
     mom_df = all_mom_ht.to_pandas()
     dad_df = all_dad_ht.to_pandas()
@@ -175,34 +205,6 @@ ped_rels_ht_merged = ped_rels_ht.annotate(i=ped_rels_ht.j, j=ped_rels_ht.i).key_
 
 rel_merged = rel.key_by()
 rel_merged = rel_merged.annotate(i=rel_merged.j, j=rel_merged.i).key_by('i', 'j').union(rel.key_by('i','j'))
-
-# ANNOTATE RELATIONSHIP FIELD USING KING HARD CUTOFFS
-# SOURCE 1: https://www.cog-genomics.org/plink/2.0/distance#king_coefs
-# Simple KING cutoffs for inferred relatedness
-# Note that KING kinship coefficients are scaled such that duplicate samples have kinship 0.5, not 1. 
-# First-degree relations (parent-child, full siblings) correspond to ~0.25, 
-# second-degree relations correspond to ~0.125, etc. 
-# It is conventional to use a cutoff of ~0.354 (the geometric mean of 0.5 and 0.25) 
-# to screen for monozygotic twins and duplicate samples, ~0.177 to add first-degree relations, etc.
-
-# SOURCE 2: https://bioweb.pasteur.fr/docs/modules/king/1.4/#:~:text=Parameter%20%2D%2Drelated%20%2D%2Ddegree,be%20excluded%20from%20the%20output.
-# lose relatives can be inferred fairly reliably based on the estimated kinship coefficients 
-# as shown in the following simple algorithm: an estimated kinship coefficient range 
-# >0.354, [0.177, 0.354], [0.0884, 0.177] and [0.0442, 0.0884] corresponds to 
-# duplicate/MZ twin, 1st-degree, 2nd-degree, and 3rd-degree relationships respectively. 
-
-# can't distinguish between parent-child and siblings just using kinship coefficient (fine for now?)
-king_cutoffs = {'parent-child': [0.177, 0.354],  
-               'second degree relatives': [0.0884, 0.177],
-               'duplicate/twins': [0.354, 1],
-               'unrelated': [0, 0.0884]}
-
-rel_merged = rel_merged.annotate(relationship=hl.case()
-                 .when(rel_merged.phi >= king_cutoffs['duplicate/twins'][0], 'duplicate/twins')
-                 .when(rel_merged.phi >= king_cutoffs['parent-child'][0], 'parent-child')
-                 .when(rel_merged.phi >= king_cutoffs['second degree relatives'][0], 'second degree relatives')
-                 .when(rel_merged.phi >= king_cutoffs['unrelated'][0], 'unrelated')
-                 .or_missing())
 
 try:
     related_in_ped = rel_merged.annotate(ped_relationship=ped_rels_ht_merged[rel_merged.key].ped_relationship)
