@@ -27,9 +27,8 @@ ped_uri = sys.argv[3]
 cores = sys.argv[4]  # string
 mem = int(np.floor(float(sys.argv[5])))
 bucket_id = sys.argv[6]
-score_table = sys.argv[7]
-genome_build = sys.argv[8]
-split_multi = ast.literal_eval(sys.argv[9].capitalize())
+genome_build = sys.argv[7]
+split_multi = ast.literal_eval(sys.argv[8].capitalize())
 
 hl.init(min_block_size=128, 
         local=f"local[*]", 
@@ -68,25 +67,13 @@ mt = hl.import_vcf(vcf_uri, reference_genome=genome_build, force_bgz=True, call_
 if split_multi:
     mt = split_multi_ssc(mt)
 
-if score_table=='false':
-    rel = hl.pc_relate(mt.GT, 0.01, k=10)
-else:
-    score_table_som = hl.read_table(score_table)
-    mt = mt.annotate_cols(scores=score_table_som[mt.s].scores)
-    rel = hl.pc_relate(mt.GT, 0.01, scores_expr=mt.scores)
+# RUN KING AND IDENTITY_BY_DESCENT
+king_mt = hl.king(mt.GT)
+king_ht = king_mt.entries().rename({'s_1':'i', 's':'j'}).key_by('i','j')
 
-rel = rel.annotate(relationship = relatedness.get_relationship_expr(rel.kin, rel.ibd0, rel.ibd1, rel.ibd2, 
-                                                   first_degree_kin_thresholds=(0.19, 0.4), second_degree_min_kin=0.1, 
-                                                   ibd0_0_max=0.2, ibd0_25_thresholds=(0.2, 0.425), ibd1_0_thresholds=(-0.15, 0.1), 
-                                                   ibd1_50_thresholds=(0.275, 0.75), ibd1_100_min=0.75, ibd2_0_max=0.125, 
-                                                   ibd2_25_thresholds=(0.1, 0.5), ibd2_100_thresholds=(0.75, 1.25))
-)
-rel = rel.key_by()
-rel = rel.annotate(i=rel.i.s, j=rel.j.s).key_by('i','j')
+ibd_ht = hl.identity_by_descent(mt)
 
-# filename = f"{bucket_id}/hail/relatedness/{str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M'))}/{cohort_prefix}_pc_relate.ht"
-# rel.write(filename)
-# pd.Series([filename]).to_csv('mt_uri.txt', header=None, index=False)
+rel = ibd_ht.annotate(phi=king_ht[ibd_ht.key].phi).flatten().key_by('i','j')
 
 ped = pd.read_csv(ped_uri, sep='\t').iloc[:, :6]
 ped.columns = ['family_id', 'sample_id', 'paternal_id', 'maternal_id', 'sex', 'phenotype']
@@ -133,43 +120,24 @@ if not ped.empty:
     dad_temp2 = ped_ht.key_by('paternal_id','sample_id')
 
     all_dad_ht = dad_temp.join(rel.semi_join(dad_temp)).key_by().union(dad_temp2.join(rel.semi_join(dad_temp2)).key_by(), unify=True)
-    all_dad_ht = all_dad_ht.annotate(father_status=all_dad_ht.relationship).drop('relationship')
 
     mom_temp = ped_ht.key_by('sample_id','maternal_id')
     mom_temp2 = ped_ht.key_by('maternal_id','sample_id')
 
     all_mom_ht = mom_temp.join(rel.semi_join(mom_temp)).key_by().union(mom_temp2.join(rel.semi_join(mom_temp2)).key_by(), unify=True)
-    all_mom_ht = all_mom_ht.annotate(mother_status=all_mom_ht.relationship).drop('relationship')
 
     mom_df = all_mom_ht.to_pandas()
     dad_df = all_dad_ht.to_pandas()
 
-    rename_cols = ['kin', 'ibd0', 'ibd1', 'ibd2']
+    # CHANGED FOR KING AND IDENTITY_BY_DESCENT
+    rename_cols = list(np.setdiff1d(list(rel.row), ['i', 'j']))
     mom_df = mom_df.rename({col: 'mother_'+col for col in rename_cols}, axis=1).copy()
     dad_df = dad_df.rename({col: 'father_'+col for col in rename_cols}, axis=1).copy()
 
     all_df = mom_df.merge(dad_df, how='outer')
 
-    # get duplicates
-    ped['sample_rank'] = 4 - (ped.sex.isin([1,2]).astype(int) + (ped.paternal_id!='0').astype(int) + (ped.maternal_id!='0').astype(int))
-
-    for s in np.setdiff1d(vcf_samps, ped.sample_id):
-        ped.at[s, 'sample_id'] = s
-        ped.loc[s, 'sample_rank'] = 4
-
-    # smaller rank is better
-    rank_ht = hl.Table.from_pandas(ped[['sample_id','sample_rank']]).key_by('sample_id')
-
     merged_rel_df = pd.concat([ped, all_df.set_index('sample_id')], axis=1)
     merged_rel_df = merged_rel_df.loc[:,~merged_rel_df.columns.duplicated()].copy()
-
-    dups = relatedness.get_duplicated_samples(rel, i_col='i', j_col='j', rel_col='relationship')
-    if len(dups)>0:
-        dup_ht = relatedness.get_duplicated_samples_ht(dups, rank_ht,  rank_ann='sample_rank')
-        dup_df = dup_ht.to_pandas()
-        merged_rel_df['duplicate_samples'] = merged_rel_df.sample_id.map(dup_df.set_index('kept').filtered.to_dict())
-    else:
-        merged_rel_df['duplicate_samples'] = np.nan
 
 else:
     merged_rel_df = ped.copy()
@@ -206,6 +174,34 @@ ped_rels_ht_merged = ped_rels_ht.annotate(i=ped_rels_ht.j, j=ped_rels_ht.i).key_
 
 rel_merged = rel.key_by()
 rel_merged = rel_merged.annotate(i=rel_merged.j, j=rel_merged.i).key_by('i', 'j').union(rel.key_by('i','j'))
+
+# ANNOTATE RELATIONSHIP FIELD USING KING HARD CUTOFFS
+# SOURCE 1: https://www.cog-genomics.org/plink/2.0/distance#king_coefs
+# Simple KING cutoffs for inferred relatedness
+# Note that KING kinship coefficients are scaled such that duplicate samples have kinship 0.5, not 1. 
+# First-degree relations (parent-child, full siblings) correspond to ~0.25, 
+# second-degree relations correspond to ~0.125, etc. 
+# It is conventional to use a cutoff of ~0.354 (the geometric mean of 0.5 and 0.25) 
+# to screen for monozygotic twins and duplicate samples, ~0.177 to add first-degree relations, etc.
+
+# SOURCE 2: https://bioweb.pasteur.fr/docs/modules/king/1.4/#:~:text=Parameter%20%2D%2Drelated%20%2D%2Ddegree,be%20excluded%20from%20the%20output.
+# lose relatives can be inferred fairly reliably based on the estimated kinship coefficients 
+# as shown in the following simple algorithm: an estimated kinship coefficient range 
+# >0.354, [0.177, 0.354], [0.0884, 0.177] and [0.0442, 0.0884] corresponds to 
+# duplicate/MZ twin, 1st-degree, 2nd-degree, and 3rd-degree relationships respectively. 
+
+# can't distinguish between parent-child and siblings just using kinship coefficient (fine for now?)
+king_cutoffs = {'parent-child': [0.177, 0.354],  
+               'second degree relatives': [0.0884, 0.177],
+               'duplicate/twins': [0.354, 1],
+               'unrelated': [0, 0.0884]}
+
+rel_merged = rel_merged.annotate(relationship=hl.case()
+                 .when(rel_merged.phi >= king_cutoffs['duplicate/twins'][0], 'duplicate/twins')
+                 .when(rel_merged.phi >= king_cutoffs['parent-child'][0], 'parent-child')
+                 .when(rel_merged.phi >= king_cutoffs['second degree relatives'][0], 'second degree relatives')
+                 .when(rel_merged.phi >= king_cutoffs['unrelated'][0], 'unrelated')
+                 .or_missing())
 
 try:
     related_in_ped = rel_merged.annotate(ped_relationship=ped_rels_ht_merged[rel_merged.key].ped_relationship)

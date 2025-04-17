@@ -1,8 +1,8 @@
 version 1.0
 
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/mergeVCFs.wdl" as mergeVCFs
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/helpers.wdl" as helpers
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/relatedness-hail-v01.wdl" as relatednessHail
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/mergeVCFs.wdl" as mergeVCFs
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/helpers.wdl" as helpers
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/relatedness-hail-v01.wdl" as relatednessHail
 
 struct RuntimeAttr {
     Float? mem_gb
@@ -23,13 +23,15 @@ workflow Relatedness {
 
         Int samples_per_chunk
         String cohort_prefix
-        String relatedness_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_relatedness_check_v0.1.py"
-        String plot_relatedness_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_relatedness_plot_v0.1.py"
-        String sex_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_impute_sex_v0.1.py"
+        String relatedness_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_relatedness_check_v0.1.py"
+        String plot_relatedness_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_relatedness_plot_v0.1.py"
+        String sex_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_impute_sex_v0.1.py"
         String sv_base_mini_docker
         String hail_docker
         String bucket_id
         String genome_build
+        String x_metric='ibd0'
+        String y_metric='kin'        
         Boolean sort_after_merge=false
         Boolean split_multi=true
         Boolean impute_sex=true
@@ -161,6 +163,8 @@ workflow Relatedness {
         cohort_prefix=cohort_prefix,
         plot_relatedness_script=plot_relatedness_script,
         hail_docker=hail_docker,
+        x_metric=x_metric,
+        y_metric=y_metric,
         chunk_size=chunk_size,
         runtime_attr_override=runtime_attr_plot_relatedness
     }

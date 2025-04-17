@@ -19,15 +19,12 @@ workflow Relatedness {
         File ped_uri
         File bed_file
         String cohort_prefix
-        String relatedness_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_relatedness_check_v0.1.py"
-        String plot_relatedness_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_relatedness_plot_v0.1.py"
-        String sex_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_impute_sex_v0.1.py"
+        String relatedness_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_relatedness_check_KING_v0.1.py"
+        String plot_relatedness_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_relatedness_plot_KING_v0.1.py"
         String sv_base_mini_docker
         String hail_docker
         String bucket_id
         String genome_build
-        String x_metric='ibd0'
-        String y_metric='kin'
         Int chunk_size=0
         Boolean sort_after_merge=false
         Boolean split_multi=true
@@ -65,18 +62,6 @@ workflow Relatedness {
     }
     File merged_vcf_file = select_first([somalier_vcf_file_, mergeVCFs.merged_vcf_file])
 
-    call imputeSex {
-        input:
-        vcf_uri=merged_vcf_file,
-        ped_uri=ped_uri,
-        cohort_prefix=cohort_prefix,
-        sex_qc_script=sex_qc_script,
-        genome_build=genome_build,
-        hail_docker=hail_docker,
-        split_multi=split_multi,
-        runtime_attr_override=runtime_attr_impute_sex
-    }
-
     call checkRelatedness {
         input:
         vcf_uri=merged_vcf_file,
@@ -86,7 +71,6 @@ workflow Relatedness {
         hail_docker=hail_docker,
         bucket_id=bucket_id,
         genome_build=genome_build,
-        score_table=false,
         runtime_attr_override=runtime_attr_check_relatedness
     }
 
@@ -97,69 +81,15 @@ workflow Relatedness {
         cohort_prefix=cohort_prefix,
         plot_relatedness_script=plot_relatedness_script,
         hail_docker=hail_docker,
-        x_metric=x_metric,
-        y_metric=y_metric,
         chunk_size=chunk_size,
         runtime_attr_override=runtime_attr_plot_relatedness
     }
 
     output {
         File somalier_vcf_file = merged_vcf_file
-        File sex_qc_plots = imputeSex.sex_qc_plots
-        File ped_sex_qc = imputeSex.ped_sex_qc
         File relatedness_qc = checkRelatedness.relatedness_qc
         File kinship_tsv = checkRelatedness.kinship_tsv
         File relatedness_plot = plotRelatedness.relatedness_plot
-    }
-}
-
-task imputeSex {
-    input {
-        File vcf_uri
-        File ped_uri
-        String cohort_prefix
-        String sex_qc_script
-        String hail_docker
-        String genome_build
-        Boolean split_multi=true
-        RuntimeAttr? runtime_attr_override
-    }
-
-    Float input_size = size(vcf_uri, "GB")
-    Float base_disk_gb = 10.0
-    Float input_disk_scale = 5.0
-
-    RuntimeAttr runtime_default = object {
-        mem_gb: 4,
-        disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
-        cpu_cores: 1,
-        preemptible_tries: 3,
-        max_retries: 1,
-        boot_disk_gb: 10
-    }
-
-    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-    Float memory = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
-    Int cpu_cores = select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    
-    runtime {
-        memory: "~{memory} GB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-        cpu: cpu_cores
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-        docker: hail_docker
-        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    }
-
-    command <<<
-        curl ~{sex_qc_script} > impute_sex.py
-        python3 impute_sex.py ~{vcf_uri} ~{cohort_prefix} ~{ped_uri} ~{cpu_cores} ~{memory} ~{genome_build} ~{split_multi}
-    >>>
-
-    output {
-        File sex_qc_plots = cohort_prefix + "_sex_qc.png"
-        File ped_sex_qc = cohort_prefix + "_sex_qc.ped"
     }
 }
 
@@ -172,7 +102,6 @@ task checkRelatedness {
         String hail_docker
         String bucket_id
         String genome_build
-        String score_table=false
         Boolean split_multi=true
         RuntimeAttr? runtime_attr_override
     }
@@ -208,7 +137,7 @@ task checkRelatedness {
         set -eou pipefail
         curl ~{relatedness_qc_script} > check_relatedness.py
         python3 check_relatedness.py ~{vcf_uri} ~{cohort_prefix} ~{ped_uri} ~{cpu_cores} ~{memory} \
-        ~{bucket_id} ~{score_table} ~{genome_build} ~{split_multi} > stdout
+        ~{bucket_id} ~{genome_build} ~{split_multi} > stdout
     >>>
 
     output {
@@ -223,8 +152,6 @@ task plotRelatedness {
         File ped_uri
         String cohort_prefix
         String plot_relatedness_script
-        String x_metric
-        String y_metric
         String hail_docker
         Int chunk_size
         RuntimeAttr? runtime_attr_override
@@ -260,7 +187,7 @@ task plotRelatedness {
     command <<<
         set -eou pipefail
         curl ~{plot_relatedness_script} > plot_relatedness.py
-        python3 plot_relatedness.py ~{kinship_tsv} ~{cohort_prefix} ~{ped_uri} ~{chunk_size} ~{x_metric} ~{y_metric} > stdout
+        python3 plot_relatedness.py ~{kinship_tsv} ~{cohort_prefix} ~{ped_uri} ~{chunk_size} > stdout
     >>>
 
     output {

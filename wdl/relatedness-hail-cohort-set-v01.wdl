@@ -1,8 +1,8 @@
 version 1.0
 
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/relatedness-hail-v01.wdl" as relatednessHail
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/relatedness-hail-subset-samples-v01.wdl" as relatednessHailSubsetSamples
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/mergeVCFSamples.wdl" as mergeVCFs
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/relatedness-hail-v01.wdl" as relatednessHail
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/relatedness-hail-subset-samples-v01.wdl" as relatednessHailSubsetSamples
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/mergeVCFSamples.wdl" as mergeVCFs
 
 struct RuntimeAttr {
     Float? mem_gb
@@ -21,13 +21,15 @@ workflow RelatednessCohortSet {
         Array[String] cohort_prefixes
         File bed_file
         String merged_filename  # no file extension
-        String relatedness_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_relatedness_check_v0.1.py"
-        String plot_relatedness_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_relatedness_plot_v0.1.py"
-        String sex_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_impute_sex_v0.1.py"
+        String relatedness_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_relatedness_check_v0.1.py"
+        String plot_relatedness_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_relatedness_plot_v0.1.py"
+        String sex_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_impute_sex_v0.1.py"
         String sv_base_mini_docker
         String hail_docker
         String bucket_id
         String genome_build
+        String x_metric='ibd0'
+        String y_metric='kin'
         Int chunk_size=100000
         Int samples_per_chunk=0
         Boolean sort_after_merge=false
@@ -88,6 +90,8 @@ workflow RelatednessCohortSet {
             hail_docker=hail_docker,
             bucket_id=bucket_id,
             genome_build=genome_build,
+            x_metric=x_metric,
+            y_metric=y_metric,
             chunk_size=chunk_size,
             sort_after_merge=sort_after_merge,
             split_multi=split_multi,
@@ -115,6 +119,8 @@ workflow RelatednessCohortSet {
             hail_docker=hail_docker,
             bucket_id=bucket_id,
             genome_build=genome_build,
+            x_metric=x_metric,
+            y_metric=y_metric,
             chunk_size=chunk_size,
             sort_after_merge=sort_after_merge,
             split_multi=split_multi,
