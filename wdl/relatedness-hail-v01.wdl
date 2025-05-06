@@ -1,7 +1,7 @@
 version 1.0
 
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/mergeVCFs.wdl" as mergeVCFs
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/helpers.wdl" as helpers
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/mergeVCFs.wdl" as mergeVCFs
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/helpers.wdl" as helpers
 
 struct RuntimeAttr {
     Float? mem_gb
@@ -19,9 +19,9 @@ workflow Relatedness {
         File ped_uri
         File bed_file
         String cohort_prefix
-        String relatedness_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_relatedness_check_v0.1.py"
-        String plot_relatedness_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_relatedness_plot_v0.1.py"
-        String sex_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_impute_sex_v0.1.py"
+        String relatedness_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_relatedness_check_v0.1.py"
+        String plot_relatedness_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_relatedness_plot_v0.1.py"
+        String sex_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_impute_sex_v0.1.py"
         String sv_base_mini_docker
         String hail_docker
         String bucket_id
