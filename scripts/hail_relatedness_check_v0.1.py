@@ -104,27 +104,28 @@ ped[['family_id', 'sample_id', 'paternal_id', 'maternal_id']] = ped[['family_id'
 vcf_samps = mt.s.collect()
 ped = ped[ped.sample_id.isin(vcf_samps)].copy()
 
+# Get the number of individuals in each family
 fam_sizes = ped.family_id.value_counts().to_dict()
-fathers = ped[~ped.paternal_id.isin(['0','-9'])].set_index('sample_id').paternal_id.to_dict()
-mothers = ped[~ped.maternal_id.isin(['0','-9'])].set_index('sample_id').maternal_id.to_dict()
+
+# Create dictionaries mapping sample_id to paternal/maternal_id (excluding missing values)
+fathers = ped[~ped.paternal_id.isin(['0', '-9'])].set_index('sample_id').paternal_id.to_dict()
+mothers = ped[~ped.maternal_id.isin(['0', '-9'])].set_index('sample_id').maternal_id.to_dict()
 
 def get_sample_role(row):
-    if fam_sizes[row.family_id]==1:
-        role = 'Singleton'
-    elif (row.maternal_id=='0') & (row.paternal_id=='0'):
-        if (row.sample_id in fathers.values()):
-            role = 'Father'
-        elif (row.sample_id in mothers.values()):
-            role = 'Mother'
+    if fam_sizes[row.family_id] == 1:
+        return 'Singleton'
+    elif row.maternal_id == '0' and row.paternal_id == '0':
+        if row.sample_id in fathers.values() or row.sex == 1:
+            return 'Father'
+        elif row.sample_id in mothers.values() or row.sex == 2:
+            return 'Mother'
         else:
-            role = 'Unknown'
-    elif (row.maternal_id in mothers.values()) & (row.paternal_id in fathers.values()):
-        role = 'Proband'
+            return 'Unknown'
     else:
-        role = 'Unknown'
-    return role
+        return 'Proband'
 
 if not ped.empty:
+    # Apply role assignment to each row
     ped['role'] = ped.apply(get_sample_role, axis=1)
 
     ped_ht = hl.Table.from_pandas(ped)
@@ -177,28 +178,36 @@ else:
 merged_rel_df.to_csv(f"{cohort_prefix}_relatedness_qc.ped", sep='\t', index=False)
 
 # annotate ped
-ped_rels = {'i':[], 'j': [], 'ped_relationship': [], 'family_id': []}
+ped_rels = {'i': [], 'j': [], 'ped_relationship': [], 'family_id': []}
 
+# Iterate over each family to determine pairwise relationships
 for fam in ped.family_id.unique():
-    fam_df = ped[ped.family_id==fam].reset_index(drop=True)
+    fam_df = ped[ped.family_id == fam].reset_index(drop=True)
+    
     for i, row_i in fam_df.iterrows():
         for j, row_j in fam_df.iterrows():
-            if (i==j) | ((row_i.role in ['Mother','Father']) & (row_j.role in ['Mother','Father'])):
-                continue
-
-            if (((row_i.paternal_id == row_j.sample_id)) | ((row_i.sample_id == row_j.paternal_id))) |\
-            (((row_i.maternal_id == row_j.sample_id)) | ((row_i.sample_id == row_j.maternal_id))):                
-                ped_rels['ped_relationship'].append('parent-child')
-            elif (row_i.paternal_id==row_j.paternal_id) & (row_i.maternal_id==row_j.maternal_id):
-                    ped_rels['ped_relationship'].append('siblings')
+            if i == j:
+                continue  # Skip self-pairs
+            
+            # Identify relationship type
+            if row_j.role in ['Mother', 'Father'] and row_i.role in ['Mother', 'Father']:
+                relation = 'unrelated'
+            elif (row_i.paternal_id == row_j.sample_id or row_i.sample_id == row_j.paternal_id or
+                  row_i.maternal_id == row_j.sample_id or row_i.sample_id == row_j.maternal_id):
+                relation = 'parent-child'
+            elif (row_i.paternal_id == row_j.paternal_id and
+                  row_i.maternal_id == row_j.maternal_id):
+                relation = 'siblings'
             else:
-                ped_rels['ped_relationship'].append('related_other')      
+                relation = 'related_other'
 
+            # Store the relationship
             ped_rels['i'].append(row_i.sample_id)
             ped_rels['j'].append(row_j.sample_id)
+            ped_rels['ped_relationship'].append(relation)
             ped_rels['family_id'].append(fam)
 
-
+# Convert relationships to DataFrame
 ped_rels_df = pd.DataFrame(ped_rels)
 ped_rels_ht = hl.Table.from_pandas(ped_rels_df)
 
