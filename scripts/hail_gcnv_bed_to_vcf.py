@@ -50,7 +50,7 @@ field_types = {'start': 'int',
                 'sc': 'int', 
                 'sf': 'float'}
 
-bed_ht = hl.import_table(bed_uri, force_bgz=True, types=field_types)  # cast start/end columns to int
+bed_ht = hl.import_table(bed_uri, force_bgz=file_ext=='bgz', force=file_ext!='bgz', types=field_types)  # cast start/end columns to int
 bed_ht = bed_ht.annotate(start=bed_ht.start + 1)  # adjust for bed 0-based coordinates
 bed_ht = bed_ht.annotate(alleles=['N', '<' + bed_ht.svtype + '>'],
                         locus=hl.locus(bed_ht.chr, bed_ht.start)).drop('chr','start')
