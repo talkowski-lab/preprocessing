@@ -13,7 +13,7 @@ workflow gCNV_BEDtoVCF {
     input {
         File bed_uri
 
-        String gcnv_bed_to_vcf_script
+        String gcnv_bed_to_vcf_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_gcnv_bed_to_vcf.py"
         String hail_docker
         String sv_pipeline_docker
 
