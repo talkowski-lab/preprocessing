@@ -25,7 +25,7 @@ entry_fields = sys.argv[6].split(',')
 priority_row_fields = sys.argv[7].split(',')
 
 file_ext = bed_uri.split('.')[-1]
-output_filename = os.path.basename(bed_uri).split('.bed') + '.vcf.bgz'
+output_filename = os.path.basename(bed_uri).split('.bed')[0] + '.vcf.bgz'
 
 bed_df = pd.read_csv(bed_uri, sep='\t',compression='gzip' if file_ext in ['gz', 'bgz'] else None)
 
