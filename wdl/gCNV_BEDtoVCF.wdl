@@ -17,6 +17,8 @@ workflow gCNV_BEDtoVCF {
         String hail_docker
         String sv_pipeline_docker
 
+        String genome_build = 'GRCh38'
+
         Array[String] row_key = ['rsid','locus','alleles']
         Array[String] col_key = ['sample_fix']
         Array[String] skip_fields = ['chr','start']  # removed
@@ -41,10 +43,11 @@ workflow gCNV_BEDtoVCF {
             col_fields=col_fields,
             entry_fields=entry_fields,
             priority_row_fields=priority_row_fields,
+            genome_build=genome_build,
             runtime_attr_override=runtime_attr_hail_bed_to_vcf
     }
 
-    call indexVCF {
+    call fillMissingGT_indexVCF {
         input:
             vcf_file=BEDtoVCF.output_vcf,
             sv_pipeline_docker=sv_pipeline_docker,
@@ -53,7 +56,7 @@ workflow gCNV_BEDtoVCF {
 
     output {
         File output_vcf_file = BEDtoVCF.output_vcf
-        File output_vcf_idx = indexVCF.output_vcf_idx
+        File output_vcf_idx = fillMissingGT_indexVCF.output_vcf_idx
     }
 }
 
@@ -61,6 +64,7 @@ task BEDtoVCF {
     input {
         File bed_uri
 
+        String genome_build
         String hail_docker
         String gcnv_bed_to_vcf_script
 
@@ -103,7 +107,7 @@ task BEDtoVCF {
     set -euo pipefail
     curl ~{gcnv_bed_to_vcf_script} > convert_bed_to_vcf.py
     python3 convert_bed_to_vcf.py ~{bed_uri} ~{sep=',' row_key} ~{sep=',' col_key} ~{sep=',' skip_fields} \
-        ~{sep=',' col_fields} ~{sep=',' entry_fields} ~{sep=',' priority_row_fields} 
+        ~{sep=',' col_fields} ~{sep=',' entry_fields} ~{sep=',' priority_row_fields} ~{genome_build}
     >>>
 
     String file_ext = if sub(basename(bed_uri), '.bed.gz', '')!=basename(bed_uri) then '.bed.gz' else '.bed.bgz'
@@ -113,7 +117,7 @@ task BEDtoVCF {
     }
 }
 
-task indexVCF {
+task fillMissingGT_indexVCF {
     input {
         File vcf_file
         String sv_pipeline_docker

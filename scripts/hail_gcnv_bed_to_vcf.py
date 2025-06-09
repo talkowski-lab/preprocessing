@@ -23,9 +23,12 @@ skip_fields = sys.argv[4].split(',') + row_key  # Also skip row_key when definin
 col_fields = sys.argv[5].split(',')
 entry_fields = sys.argv[6].split(',')
 priority_row_fields = sys.argv[7].split(',')
+genome_build = sys.argv[8]
 
 file_ext = bed_uri.split('.')[-1]
 output_filename = os.path.basename(bed_uri).split('.bed')[0] + '.vcf.bgz'
+
+hl.init(default_reference=genome_build)
 
 bed_df = pd.read_csv(bed_uri, sep='\t',compression='gzip' if file_ext in ['gz', 'bgz'] else None)
 
