@@ -106,7 +106,7 @@ task BEDtoVCF {
         ~{sep=',' col_fields} ~{sep=',' entry_fields} ~{sep=',' priority_row_fields} 
     >>>
 
-    String file_ext = if sub(basename(bed_uri), '.bed.gz', '')!=basename(file_ext) then '.bed.gz' else '.vcf.bgz'
+    String file_ext = if sub(basename(bed_uri), '.bed.gz', '')!=basename(file_ext) then '.bed.gz' else '.bed.bgz'
 
     output {
         File output_vcf = basename(bed_uri, file_ext) + '.vcf.bgz'
