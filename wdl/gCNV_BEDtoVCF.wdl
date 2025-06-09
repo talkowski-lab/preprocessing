@@ -146,12 +146,17 @@ task indexVCF {
         bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
     }    
 
+    String gz_vcf_file = basename(vcf_file, '.vcf.bgz') + '.vcf.gz'
+    String vcf_filled_missing_GT = basename(gz_vcf_file, '.vcf.gz')+'.fill.missing.GT.vcf.gz'
+
     command <<<
     set -euo pipefail
-    bcftools index -t ~{vcf_file}
+    mv ~{vcf_file} ~{gz_vcf_file}
+    bcftools filter -S 0 -e 'GT=="./."' -Oz -o ~{vcf_filled_missing_GT} ~{gz_vcf_file}
+    bcftools index -t ~{vcf_filled_missing_GT}
     >>>
 
     output {
-        File output_vcf_idx = basename(vcf_file) + '.tbi'
+        File output_vcf_idx = vcf_filled_missing_GT + '.tbi'
     }
 }
