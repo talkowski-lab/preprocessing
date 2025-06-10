@@ -57,21 +57,7 @@ bed_ht = hl.import_table(bed_uri, force_bgz=file_ext=='bgz', force=file_ext!='bg
 bed_ht = bed_ht.annotate(start=bed_ht.start + 1)  # adjust for bed 0-based coordinates
 bed_ht = bed_ht.annotate(alleles=['N', '<' + bed_ht.svtype + '>'],
                         locus=hl.locus(bed_ht.chr, bed_ht.start)).drop('chr','start')
-
-# NEED UNIQUE ROW KEY TO NOT MESS THINGS UP
-# Set variant_name field as rsid for VCF column with _REP{i} suffix for repeats
-# Count occurrences of each variant_name
-variant_name_count_dict = bed_ht.aggregate(hl.agg.counter(bed_ht.variant_name))
-variant_name_count = hl.dict(variant_name_count_dict)
-
-# Annotate rows with a new variant_name, adding a suffix for repeats
-bed_ht = bed_ht.add_index()
-bed_ht = bed_ht.annotate(
-    rsid = hl.case()
-        .when(variant_name_count[bed_ht.variant_name] > 1, 
-              bed_ht.variant_name + "_REP" + hl.str(bed_ht.idx))
-        .default(bed_ht.variant_name)
-)
+bed_ht = bed_ht.annotate(rsid=bed_ht.variant_name)
 
 row_fields = list(np.setdiff1d(list(bed_ht.row), entry_fields + skip_fields + col_fields + col_key))
 
@@ -90,7 +76,7 @@ bed_mt = bed_mt.annotate_rows(END=bed_mt.end, SVTYPE=bed_mt.svtype)
 # Calculate SVLEN from start and end
 bed_mt = bed_mt.annotate_rows(SVLEN=(bed_mt.end-bed_mt.locus.position)+1)
 # Move row fields to INFO and drop original row fields
-og_row_fields = list(np.setdiff1d(list(bed_mt.row), row_key))
+og_row_fields = list(np.setdiff1d(list(bed_mt.row), row_key + ['locus','alleles']))
 bed_mt = bed_mt.annotate_rows(info=bed_mt.row.drop(*['end','svtype','locus','alleles'])).drop(*og_row_fields)
 
 # Change order of rows
@@ -103,8 +89,6 @@ bed_mt = bed_mt.annotate_entries(gCNV_GT=bed_mt.GT,
                                  GT=hl.if_else(hl.is_missing(bed_mt.GT), 
                                               hl.call(0, 0),
                                               hl.call(0, 1)))
-
-variant_name_count_series = pd.Series(variant_name_count_dict)
 
 # KEY ROWS BY LOCUS AND ALLELES FOR EXPORT
 # TAKES A LOT LONGER WITH THE RSID FIXES ABOVE?

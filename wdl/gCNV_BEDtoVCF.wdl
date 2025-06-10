@@ -19,7 +19,7 @@ workflow gCNV_BEDtoVCF {
 
         String genome_build = 'GRCh38'
 
-        Array[String] row_key = ['rsid','locus','alleles']
+        Array[String] row_key = ['rsid']
         Array[String] col_key = ['sample_fix']
         Array[String] skip_fields = ['chr','start']  # removed
         Array[String] col_fields = ['sample']
