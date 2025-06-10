@@ -55,7 +55,7 @@ workflow gCNV_BEDtoVCF {
     }
 
     output {
-        File output_vcf_file = BEDtoVCF.output_vcf
+        File output_vcf_file = fillMissingGT_indexVCF.output_vcf_file
         File output_vcf_idx = fillMissingGT_indexVCF.output_vcf_idx
     }
 }
@@ -161,6 +161,7 @@ task fillMissingGT_indexVCF {
     >>>
 
     output {
+        File output_vcf_file = vcf_filled_missing_GT
         File output_vcf_idx = vcf_filled_missing_GT + '.tbi'
     }
 }
