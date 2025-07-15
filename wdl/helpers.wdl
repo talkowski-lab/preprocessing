@@ -462,7 +462,8 @@ task ConvertTSVtoExcel {
         python3 convert_tsv.py ~{tsv}
     >>>
 
-    String output_filename = "~{basename(tsv, '.tsv')}.xlsx"
+    String file_ext = if sub(basename(tsv), '.tsv.gz', '')!=basename(tsv) then '.tsv.gz' else '.tsv'
+    String output_filename = "~{basename(tsv, file_ext)}.xlsx"
     output {
         File output_excel = output_filename
     }   
