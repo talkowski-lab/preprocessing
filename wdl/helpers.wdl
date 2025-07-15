@@ -463,7 +463,7 @@ task ConvertTSVtoExcel {
     >>>
 
     output {
-        File output_excel = basename(tsv) + '.xlsx'
+        File output_excel = basename(tsv, '.tsv') + '.xlsx'
     }   
 }
 
