@@ -11,19 +11,21 @@ struct RuntimeAttr {
 
 workflow FillMissingGT {
     input {
-        File vcf_file
+        Array[File] vcf_files
         String sv_base_mini_docker
     }
 
-    call fillMissingGT_indexVCF {
-        input:
-        vcf_file=vcf_file,
-        sv_base_mini_docker=sv_base_mini_docker
+    scatter (vcf_file in vcf_files) {
+        call fillMissingGT_indexVCF {
+            input:
+            vcf_file=vcf_file,
+            sv_base_mini_docker=sv_base_mini_docker
+        }
     }
 
     output {
-        File output_vcf_file = fillMissingGT_indexVCF.output_vcf_file
-        File output_vcf_idx = fillMissingGT_indexVCF.output_vcf_idx
+        Array[File] output_vcf_files = fillMissingGT_indexVCF.output_vcf_file
+        Array[File] output_vcf_idx = fillMissingGT_indexVCF.output_vcf_idx
     }
 }
 
