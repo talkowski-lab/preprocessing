@@ -47,7 +47,7 @@ workflow RelatednessCohortSet {
 
     if (!defined(somalier_vcf_file_)) {
         scatter (pair in zip(cohort_prefixes, select_first([somalier_vcf_files]))) {
-            call mergeVCFSamples.renameVCFSamplesWithCohort as renameVCFSamplesWithCohort{
+            call mergeVCFSamples.renameVCFSamplesWithCohort as renameVCFSamplesWithCohort {
                 input:
                     vcf_uri=pair.right,
                     cohort_prefix=pair.left,
@@ -55,7 +55,7 @@ workflow RelatednessCohortSet {
                     runtime_attr_override=runtime_attr_rename_vcf
             }
         }
-        call mergeVCFSamples.mergeVCFs as mergeVCFs {
+        call mergeVCFSamples.mergeVCFs as mergeVCFSamples {
             input:
             vcf_files=renameVCFSamplesWithCohort.renamed_vcf_file,
             output_vcf_name=merged_filename+'.vcf.gz',
@@ -65,7 +65,7 @@ workflow RelatednessCohortSet {
         }
     }
 
-    File merged_vcf_file = select_first([somalier_vcf_file_, mergeVCFs.merged_vcf_file])
+    File merged_vcf_file = select_first([somalier_vcf_file_, mergeVCFSamples.merged_vcf_file])
 
     call mergePeds {
         input:

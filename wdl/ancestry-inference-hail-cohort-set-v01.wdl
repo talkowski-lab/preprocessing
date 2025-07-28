@@ -1,8 +1,8 @@
 version 1.0
 
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/mergeVCFs.wdl" as mergeVCFs
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/helpers.wdl" as helpers
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/ancestry-inference-hail-v01.wdl" as AncestryInference
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/mergeVCFSamples.wdl" as mergeVCFSamples
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/helpers.wdl" as helpers
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/ancestry-inference-hail-v01.wdl" as AncestryInference
 
 struct RuntimeAttr {
     Float? mem_gb
@@ -24,9 +24,10 @@ workflow AncestryInferenceCohortSet {
         File gnomad_rf_onnx
         File pop_labels_tsv
         String gnomad_loading_ht
-        String infer_ancestry_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_infer_ancestry_v0.1.py"
+        String infer_ancestry_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_infer_ancestry_v0.1.py"
 
-        String cohort_set_id
+        Array[String] cohort_prefixes
+        String cohort_prefix
         String hail_docker
         String sv_base_mini_docker
 
@@ -44,32 +45,20 @@ workflow AncestryInferenceCohortSet {
     }
 
     if ((!defined(ancestry_vcf_file_)) || (ancestry_vcf_file_ == '')) {        
-    if (!defined(somalier_vcf_file_)) {
-        scatter (pair in zip(cohort_prefixes, select_first([somalier_vcf_files]))) {
-            call renameVCFSamples {
+        scatter (pair in zip(cohort_prefixes, select_first([ancestry_vcf_files]))) {
+            call mergeVCFSamples.renameVCFSamplesWithCohort as renameVCFSamples {
                 input:
                     vcf_uri=pair.right,
                     cohort_prefix=pair.left,
-                    hail_docker=hail_docker,
-                    runtime_attr_override=runtime_attr_rename_vcf
+                    hail_docker=hail_docker
             }
         }
-        call mergeVCFs.mergeVCFs as mergeVCFs {
+        call mergeVCFSamples.mergeVCFs as mergeVCFSamples {
             input:
             vcf_files=renameVCFSamples.renamed_vcf_file,
-            output_vcf_name=merged_filename+'.vcf.gz',
+            output_vcf_name=cohort_prefix+'.ancestry_sites.vcf.gz',
             sv_base_mini_docker=sv_base_mini_docker,
             recalculate_af=false,
-            runtime_attr_override=runtime_attr_merge_vcfs
-        }
-    }
-
-        call mergeVCFSamples {
-            input:
-            vcf_files=select_first([ancestry_vcf_files]),
-            hail_docker=hail_docker,
-            prefix=cohort_set_id,
-            genome_build=genome_build,
             runtime_attr_override=runtime_attr_merge_vcfs
         }
     }
@@ -83,7 +72,7 @@ workflow AncestryInferenceCohortSet {
                 gnomad_vcf_uri=gnomad_vcf_uri,
                 gnomad_rf_onnx=gnomad_rf_onnx,
                 pop_labels_tsv=pop_labels_tsv,
-                cohort_prefix=cohort_set_id,
+                cohort_prefix=cohort_prefix,
                 gnomad_loading_ht=gnomad_loading_ht,
                 infer_ancestry_script=infer_ancestry_script,
                 hail_docker=hail_docker,
