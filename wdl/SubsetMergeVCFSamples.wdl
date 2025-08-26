@@ -86,22 +86,21 @@ task mergeCommonVCFs {
     command <<<
         set -euo pipefail
         VCFS="~{write_lines(vcf_files)}"
-        cat $VCFS | awk -F '/' '{print $NF"\t"$0}' | sort -k1,1V | awk '{print $2}' > vcfs_sorted.list
 
         # Index inputs
-        for vcf in $(cat vcfs_sorted.list); do
+        for vcf in $(cat $VCFS); do
             tabix $vcf
         done
 
         # Get number of VCFs
-        N=$(wc -l < vcfs_sorted.list)
+        N=$(wc -l < $VCFS)
 
         # Step 1: Extract only sites common across all VCFs
-        bcftools isec -n =$N -w1 -Oz -o common_sites.vcf.gz $(cat vcfs_sorted.list)
+        bcftools isec -n =$N -w1 -Oz -o common_sites.vcf.gz $(cat $VCFS)
         tabix common_sites.vcf.gz
 
         # Step 2: Merge VCFs, restricted to common sites
-        bcftools merge -m none -Oz -o ~{output_vcf_name} --file-list vcfs_sorted.list --no-update -R common_sites.vcf.gz
+        bcftools merge -m none -Oz -o ~{output_vcf_name} --file-list $VCFS --no-update -R common_sites.vcf.gz
 
         if [ "~{fill_missing}" = "true" ]; then
             mv ~{output_vcf_name} tmp_~{output_vcf_name}
