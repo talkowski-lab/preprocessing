@@ -62,11 +62,14 @@ mt = hl.import_vcf(vcf_uri, reference_genome=genome_build, force_bgz=True, call_
 if split_multi:
     mt = split_multi_ssc(mt)
 
-mt = mt.annotate_entries(AB=mt.AD[1]/hl.sum(mt.AD))
-mt = mt.annotate_entries(GT=hl.or_missing(mt.DP!=0, mt.GT))
-# only consider hets with 0.3 <= AB <= 0.7
-mt = mt.annotate_entries(GT=hl.if_else(mt.GT.is_het(),
-                         hl.or_missing((mt.AB>=0.3) & (mt.AB<=0.7), mt.GT), mt.GT))
+if 'DP' in list(mt.row):
+    mt = mt.annotate_entries(GT=hl.or_missing(mt.DP!=0, mt.GT))
+
+if 'AD' in list(mt.row):
+    mt = mt.annotate_entries(AB=mt.AD[1]/hl.sum(mt.AD))
+    # only consider hets with 0.3 <= AB <= 0.7
+    mt = mt.annotate_entries(GT=hl.if_else(mt.GT.is_het(),
+                            hl.or_missing((mt.AB>=0.3) & (mt.AB<=0.7), mt.GT), mt.GT))
 
 all_qc = hl.sample_qc(mt)
 all_qc_df = all_qc.cols().flatten().to_pandas()
