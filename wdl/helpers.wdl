@@ -786,7 +786,6 @@ task subsetVCFSamples {
         input {
         File vcf_file
         File samples_file  # .txt extension  
-        Boolean force_samples=false
         String docker
         RuntimeAttr? runtime_attr_override
     }
@@ -819,7 +818,7 @@ task subsetVCFSamples {
     }
 
     command <<<
-    bcftools view -S ~{samples_file} ~{if force_samples then "--force-samples" else ""} -Oz -o ~{basename(samples_file, '.txt')+'.vcf.gz'} ~{vcf_file}
+    bcftools view -S ~{samples_file} --force-samples --no-update -Oz -o ~{basename(samples_file, '.txt')+'.vcf.gz'} ~{vcf_file}
     tabix ~{basename(samples_file, '.txt')+'.vcf.gz'}
     >>>
 
