@@ -36,7 +36,7 @@ task mergeVCFs {
         Array[File] vcf_files
         String sv_base_mini_docker
         String cohort_prefix
-        Boolean sort_after_merge
+        Boolean sort_after_merge=false
         Boolean naive=true
         Boolean allow_overlaps=false  # cannot be used with naive
         Array[File]? vcf_indices  # need if allow_overlaps=true
