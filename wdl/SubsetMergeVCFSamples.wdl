@@ -101,7 +101,7 @@ task mergeCommonVCFs {
         tabix common_sites.vcf.gz
 
         # Step 2: Merge VCFs, restricted to common sites
-        bcftools merge -m none -Oz -o ~{output_vcf_name} --file-list vcfs_sorted.list -R common_sites.vcf.gz
+        bcftools merge -m none -Oz -o ~{output_vcf_name} --file-list vcfs_sorted.list --no-update -R common_sites.vcf.gz
 
         if [ "~{fill_missing}" = "true" ]; then
             mv ~{output_vcf_name} tmp_~{output_vcf_name}
