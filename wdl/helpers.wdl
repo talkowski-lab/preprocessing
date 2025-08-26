@@ -819,10 +819,12 @@ task subsetVCFSamples {
 
     command <<<
     bcftools view -S ~{samples_file} --force-samples -Oz -o ~{basename(samples_file, '.txt')+'.vcf.gz'} ~{vcf_file}
+    tabix ~{basename(samples_file, '.txt')+'.vcf.gz'}
     >>>
 
     output {
         File vcf_subset = basename(samples_file, '.txt') + '.vcf.gz'
+        File vcf_subset_idx = basename(samples_file, '.txt') + '.vcf.gz.tbi'
     }
 }
 
