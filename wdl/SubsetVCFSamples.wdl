@@ -18,8 +18,6 @@ workflow SubsetVCFSamples {
         Array[File] vcf_files
         Array[String] samples_array
 
-        Array[String] cohort_prefixes
-        String merged_prefix
         String sv_base_mini_docker
     }
 
