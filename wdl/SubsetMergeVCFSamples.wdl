@@ -15,7 +15,7 @@ struct RuntimeAttr {
 
 workflow MergeVCFSamples {
     input {
-        Array[Array[String]] cohort_vcf_files
+        Array[File] cohort_vcf_files
         Array[String] samples_array
 
         Array[String] cohort_prefixes
