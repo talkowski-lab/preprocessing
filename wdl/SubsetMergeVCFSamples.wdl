@@ -23,7 +23,7 @@ workflow MergeVCFSamples {
         String sv_base_mini_docker
     }
 
-    scatter (vcf_file in flatten(cohort_vcf_files)) {
+    scatter (vcf_file in cohort_vcf_files) {
         call helpers.subsetVCFSamples as subsetCohortVCFSamples {
             input:
             vcf_file=vcf_file,
