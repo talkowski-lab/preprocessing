@@ -56,7 +56,10 @@ def merge_vcfs(vcf_files):
         m = m.select_rows()  # drop row fields
         merged = merged.union_cols(m)
 
-    merged = merged.select_rows(*list(mts[0].row))
+    # Keep only the non-key row fields from the first VCF
+    row_keys = list(merged.row_key)  # ['locus', 'alleles']
+    row_fields = [f for f in mts[0].row if f not in row_keys]
+    merged = merged.select_rows(*row_fields)
 
     return merged
 
