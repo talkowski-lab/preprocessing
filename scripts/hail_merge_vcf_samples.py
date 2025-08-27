@@ -23,13 +23,13 @@ def intersect_entry_fields(mts):
 
 def merge_vcfs(vcf_files):
     # Load first VCF
-    mt = hl.import_vcf(vcf_files[0], force_bgz=vcf_files[0].split('.')[-1]=='gz')
+    mt = hl.import_vcf(vcf_files[0], array_elements_required=False, force_bgz=vcf_files[0].split('.')[-1]=='gz')
 
     # Collect common rows across all VCFs
     mts = [mt]
     common_rows = mt.rows()
     for vcf in vcf_files[1:]:
-        other_mt = hl.import_vcf(vcf, force_bgz=vcf.split('.')[-1]=='gz')
+        other_mt = hl.import_vcf(vcf, array_elements_required=False, force_bgz=vcf.split('.')[-1]=='gz')
         mts.append(other_mt)
         common_rows = common_rows.semi_join(other_mt.rows())
 
