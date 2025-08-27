@@ -23,25 +23,23 @@ workflow MergeVCFSamples {
         String sv_base_mini_docker
     }
 
-    scatter (vcf_file in cohort_vcf_files) {
-        call helpers.subsetVCFSamples as subsetCohortVCFSamples {
-            input:
-            vcf_file=vcf_file,
-            samples_file=write_lines(samples_array),
-            docker=sv_base_mini_docker
-        }
-    }
-
     call mergeCommonVCFs as mergeCommonVCFs {
         input:
-        vcf_files=subsetCohortVCFSamples.vcf_subset,
+        vcf_files=cohort_vcf_files,
         output_vcf_name=merged_prefix + '.merged.vcf.gz',
         sv_base_mini_docker=sv_base_mini_docker
     }
 
+    call helpers.subsetVCFSamples as subsetCohortVCFSamples {
+        input:
+        vcf_file=mergeCommonVCFs.merged_vcf_file,
+        samples_file=write_lines(samples_array),
+        docker=sv_base_mini_docker
+    }
+
     output {
-        File merged_vcf_file = mergeCommonVCFs.merged_vcf_file
-        File merged_vcf_idx = mergeCommonVCFs.merged_vcf_idx
+        File merged_vcf_file = subsetCohortVCFSamples.vcf_subset
+        File merged_vcf_idx = subsetCohortVCFSamples.vcf_subset_idx
     }
 }
 
