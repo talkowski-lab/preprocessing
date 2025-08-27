@@ -20,26 +20,34 @@ workflow MergeVCFSamples {
 
         Array[String] cohort_prefixes
         String merged_prefix
+        String hail_docker
         String sv_base_mini_docker
+
+        String genome_build='GRCh38'
+        String hail_merge_vcf_samples_script="https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_merge_vcf_samples.py"
     }
 
-    call mergeCommonVCFs as mergeCommonVCFs {
-        input:
-        vcf_files=cohort_vcf_files,
-        output_vcf_name=merged_prefix + '.merged.vcf.gz',
-        sv_base_mini_docker=sv_base_mini_docker
+    scatter (vcf_file in cohort_vcf_files) {
+        call helpers.subsetVCFSamples as subsetCohortVCFSamples {
+            input:
+            vcf_file=vcf_file,
+            samples_file=write_lines(samples_array),
+            docker=sv_base_mini_docker
+        }
     }
 
-    call helpers.subsetVCFSamples as subsetCohortVCFSamples {
+    call mergeCommonVCFsHail {
         input:
-        vcf_file=mergeCommonVCFs.merged_vcf_file,
-        samples_file=write_lines(samples_array),
-        docker=sv_base_mini_docker
+        vcf_files=subsetCohortVCFSamples.vcf_subset,
+        output_vcf_name=merged_prefix + '.merged.vcf.bgz',
+        hail_docker=hail_docker,
+        genome_build=genome_build,
+        hail_merge_vcf_samples_script=hail_merge_vcf_samples_script
     }
 
     output {
-        File merged_vcf_file = subsetCohortVCFSamples.vcf_subset
-        File merged_vcf_idx = subsetCohortVCFSamples.vcf_subset_idx
+        File merged_vcf_file = mergeCommonVCFsHail.merged_vcf_file
+        File merged_vcf_idx = mergeCommonVCFsHail.merged_vcf_idx
     }
 }
 
@@ -118,3 +126,58 @@ task mergeCommonVCFs {
         File merged_vcf_idx = output_vcf_name + ".tbi"
     }
 }
+
+task mergeCommonVCFsHail {
+    input {
+        Array[File] vcf_files
+        String output_vcf_name
+
+        String hail_docker
+        String genome_build
+        String hail_merge_vcf_samples_script
+
+        RuntimeAttr? runtime_attr_override
+    }
+
+    Float input_size = size(vcf_files, 'GB')
+    Float base_disk_gb = 10.0
+    Float input_disk_scale = 5.0
+
+    RuntimeAttr runtime_default = object {
+        mem_gb: 4,
+        disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
+        cpu_cores: 1,
+        preemptible_tries: 3,
+        max_retries: 1,
+        boot_disk_gb: 10
+    }
+
+    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+    Float memory = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+    Int cpu_cores = select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+
+    runtime {
+        memory: "~{memory} GB"
+        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: cpu_cores
+        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        docker: hail_docker
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+
+    command <<<
+        set -euo pipefail
+        curl ~{hail_merge_vcf_samples_script} > merge_vcf_samples.py
+        python3 merge_vcf_samples.py --vcfs ~{sep=',' vcf_files} --output ~[output_vcf_name] \
+            --mem ~{memory} --genome_build ~{genome_build}
+    >>>
+
+    output {
+        File merged_vcf_file = output_vcf_name
+        File merged_vcf_idx = output_vcf_name + '.tbi'
+    }
+}
+
+
