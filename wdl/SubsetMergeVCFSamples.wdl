@@ -170,7 +170,7 @@ task mergeCommonVCFsHail {
     command <<<
         set -euo pipefail
         curl ~{hail_merge_vcf_samples_script} > merge_vcf_samples.py
-        python3 merge_vcf_samples.py --vcfs ~{sep=',' vcf_files} --output ~[output_vcf_name] \
+        python3 merge_vcf_samples.py --vcfs ~{sep=',' vcf_files} --output ~{output_vcf_name} \
             --mem ~{memory} --genome_build ~{genome_build}
     >>>
 
