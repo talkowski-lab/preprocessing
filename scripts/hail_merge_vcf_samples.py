@@ -4,31 +4,61 @@ import argparse
 import numpy as np
 import hail as hl
 
+def intersect_entry_fields(mts):
+    """
+    Get entry field names shared across all MatrixTables with identical types.
+    """
+    common_fields = set(mts[0].entry.keys())
+    for mt in mts[1:]:
+        common_fields &= set(mt.entry.keys())
+
+    # Check types and keep only fields with matching types
+    consistent_fields = []
+    for f in common_fields:
+        t0 = mts[0].entry[f].dtype
+        if all(mt.entry[f].dtype == t0 for mt in mts[1:]):
+            consistent_fields.append(f)
+
+    return consistent_fields
+
 def merge_vcfs(vcf_files):
     # Load first VCF
     mt = hl.import_vcf(vcf_files[0], force_bgz=vcf_files[0].split('.')[-1]=='gz')
-    
+
     # Collect common rows across all VCFs
+    mts = [mt]
     common_rows = mt.rows()
     for vcf in vcf_files[1:]:
         other_mt = hl.import_vcf(vcf, force_bgz=vcf.split('.')[-1]=='gz')
+        mts.append(other_mt)
         common_rows = common_rows.semi_join(other_mt.rows())
 
-    # Filter the first VCF to common rows
-    mt = mt.semi_join_rows(common_rows)
+    # Restrict all datasets to common rows
+    mts = [m.semi_join_rows(common_rows) for m in mts]
 
-    # Merge the rest
-    for vcf in vcf_files[1:]:
-        other_mt = hl.import_vcf(vcf, force_bgz=vcf.split('.')[-1]=='gz')
-        other_mt = other_mt.semi_join_rows(common_rows)
-        other_mt = other_mt.select_rows()  # drop row fields
-        mt = mt.union_cols(other_mt)
+    # Find entry fields in common with matching dtypes
+    common_fields = set(mts[0].entry.keys())
+    for m in mts[1:]:
+        common_fields &= set(m.entry.keys())
 
-    # Keep only row fields from the first VCF
-    mt = mt.select_rows(*list(mt.row))
+    consistent_fields = []
+    for f in common_fields:
+        dtype0 = mts[0].entry[f].dtype
+        if all(m.entry[f].dtype == dtype0 for m in mts[1:]):
+            consistent_fields.append(f)
 
-    return mt
+    # Keep only consistent entry fields
+    mts = [m.select_entries(*consistent_fields) for m in mts]
 
+    # Merge while keeping only row fields from the first VCF
+    merged = mts[0]
+    for m in mts[1:]:
+        m = m.select_rows()  # drop row fields
+        merged = merged.union_cols(m)
+
+    merged = merged.select_rows(*list(mts[0].row))
+
+    return merged
 
 def main():
     parser = argparse.ArgumentParser(description="Merge VCFs in Hail")
