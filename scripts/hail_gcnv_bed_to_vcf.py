@@ -101,8 +101,10 @@ bed_mt = bed_mt.annotate_rows(info=bed_mt.info.select(*row_field_order))
 
 # Count missing as hom_ref 
 # Rename GT entry field from gCNV as gCNV_GT
-bed_mt = bed_mt.annotate_entries(gCNV_GT=bed_mt.GT,
-                                 GT=hl.if_else(hl.is_missing(bed_mt.GT), 
+if 'GT' in list(bed_mt.row):
+    bed_mt = bed_mt.annotate_entries(gCNV_GT=bed_mt.GT)
+
+bed_mt = bed_mt.annotate_rows(GT=hl.if_else(hl.is_missing(bed_mt.CN), 
                                               hl.call(0, 0),
                                               hl.call(0, 1)))
 
