@@ -16,17 +16,33 @@ import os
 import ast
 import datetime
 
-bed_uri = sys.argv[1]
-row_key = sys.argv[2].split(',')
-col_key = sys.argv[3].split(',')
-skip_fields = sys.argv[4].split(',') + row_key  # Also skip row_key when defining row_fields
-col_fields = sys.argv[5].split(',')
-entry_fields = sys.argv[6].split(',')
-priority_row_fields = sys.argv[7].split(',')
-genome_build = sys.argv[8]
+import argparse
+import os
 
-file_ext = bed_uri.split('.')[-1]
-output_filename = os.path.basename(bed_uri).split('.bed')[0] + '.vcf.bgz'
+parser = argparse.ArgumentParser(description="Convert BED-like input to VCF with defined row/col fields.")
+
+parser.add_argument("--bed-uri", required=True, help="Input BED file URI")
+parser.add_argument("--row-key", default="", help="Comma-separated list of row key fields")
+parser.add_argument("--col-key", default="", help="Comma-separated list of column key fields")
+parser.add_argument("--skip-fields", default="", help="Comma-separated list of fields to skip")
+parser.add_argument("--col-fields", default="", help="Comma-separated list of column fields")
+parser.add_argument("--entry-fields", default="", help="Comma-separated list of entry fields")
+parser.add_argument("--priority-row-fields", default="", help="Comma-separated list of priority row fields")
+parser.add_argument("--genome-build", default="hg38", help="Genome build (e.g. hg19, hg38)")
+
+args = parser.parse_args()
+
+bed_uri = args.bed_uri
+row_key = args.row_key.split(",") if args.row_key else []
+col_key = args.col_key.split(",") if args.col_key else []
+skip_fields = (args.skip_fields.split(",") if args.skip_fields else []) + row_key
+col_fields = args.col_fields.split(",") if args.col_fields else []
+entry_fields = args.entry_fields.split(",") if args.entry_fields else []
+priority_row_fields = args.priority_row_fields.split(",") if args.priority_row_fields else []
+genome_build = args.genome_build
+
+file_ext = bed_uri.split(".")[-1]
+output_filename = os.path.basename(bed_uri).split(".bed")[0] + ".vcf.bgz"
 
 hl.init(default_reference=genome_build)
 

@@ -106,8 +106,15 @@ task BEDtoVCF {
     command <<<
     set -euo pipefail
     curl ~{gcnv_bed_to_vcf_script} > convert_bed_to_vcf.py
-    python3 convert_bed_to_vcf.py ~{bed_uri} ~{sep=',' row_key} ~{sep=',' col_key} ~{sep=',' skip_fields} \
-        ~{sep=',' col_fields} ~{sep=',' entry_fields} ~{sep=',' priority_row_fields} ~{genome_build}
+    python3 convert_bed_to_vcf.py \
+        --bed-uri ~{bed_uri} \
+        --row-key ~{sep=',' row_key} \
+        --col-key ~{sep=',' col_key} \
+        --skip-fields ~{sep=',' skip_fields} \
+        --col-fields ~{sep=',' col_fields} \
+        --entry-fields ~{sep=',' entry_fields} \
+        --priority-row-fields ~{sep=',' priority_row_fields} \
+        --genome-build ~{genome_build}
     >>>
 
     String file_ext = if sub(basename(bed_uri), '.bed.gz', '')!=basename(bed_uri) then '.bed.gz' else '.bed.bgz'
