@@ -29,6 +29,7 @@ parser.add_argument("--col-fields", default="", help="Comma-separated list of co
 parser.add_argument("--entry-fields", default="", help="Comma-separated list of entry fields")
 parser.add_argument("--priority-row-fields", default="", help="Comma-separated list of priority row fields")
 parser.add_argument("--genome-build", default="hg38", help="Genome build (e.g. hg19, hg38)")
+parser.add_argument("--file-ext", default="hg38", help="File extension of BED file")
 
 args = parser.parse_args()
 
@@ -40,9 +41,9 @@ col_fields = args.col_fields.split(",") if args.col_fields else []
 entry_fields = args.entry_fields.split(",") if args.entry_fields else []
 priority_row_fields = args.priority_row_fields.split(",") if args.priority_row_fields else []
 genome_build = args.genome_build
+file_ext = args.file_ext
 
-file_ext = bed_uri.split(".")[-1]
-output_filename = os.path.basename(bed_uri).split(".bed")[0] + ".vcf.bgz"
+output_filename = os.path.basename(bed_uri).split(file_ext)[0] + ".vcf.bgz"
 
 hl.init(default_reference=genome_build)
 

@@ -114,7 +114,8 @@ task BEDtoVCF {
         ~{if length(col_fields) > 0 then "--col-fields " else ""}~{sep=',' col_fields} \
         ~{if length(entry_fields) > 0 then "--entry-fields " else ""}~{sep=',' entry_fields} \
         ~{if length(priority_row_fields) > 0 then "--priority-row-fields " else ""}~{sep=',' priority_row_fields} \
-        --genome-build ~{genome_build}
+        --genome-build ~{genome_build} \
+        --file-ext ~{file_ext}
     >>>
 
     String file_ext = if sub(basename(bed_uri), '.bed.gz', '')!=basename(bed_uri) then '.bed.gz' else '.bed.bgz'
