@@ -108,12 +108,12 @@ task BEDtoVCF {
     curl ~{gcnv_bed_to_vcf_script} > convert_bed_to_vcf.py
     python3 convert_bed_to_vcf.py \
         --bed-uri ~{bed_uri} \
-        ~{if length(row_key) > 0 then "--row-key " + sep(",", row_key) else ""} \
-        ~{if length(col_key) > 0 then "--col-key " + sep(",", col_key) else ""} \
-        ~{if length(skip_fields) > 0 then "--skip-fields " + sep(",", skip_fields) else ""} \
-        ~{if length(col_fields) > 0 then "--col-fields " + sep(",", col_fields) else ""} \
-        ~{if length(entry_fields) > 0 then "--entry-fields " + sep(",", entry_fields) else ""} \
-        ~{if length(priority_row_fields) > 0 then "--priority-row-fields " + sep(",", priority_row_fields) else ""} \
+        ~{if length(row_key) > 0 then "--row-key " else ""}~{sep=',' row_key} \
+        ~{if length(col_key) > 0 then "--col-key " else ""}~{sep=',' col_key} \
+        ~{if length(skip_fields) > 0 then "--skip-fields " else ""}~{sep=',' skip_fields} \
+        ~{if length(col_fields) > 0 then "--col-fields " else ""}~{sep=',' col_fields} \
+        ~{if length(entry_fields) > 0 then "--entry-fields " else ""}~{sep=',' entry_fields} \
+        ~{if length(priority_row_fields) > 0 then "--priority-row-fields " else ""}~{sep=',' priority_row_fields} \
         --genome-build ~{genome_build}
     >>>
 
