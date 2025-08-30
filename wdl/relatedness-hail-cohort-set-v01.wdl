@@ -20,7 +20,6 @@ workflow RelatednessCohortSet {
         Array[File] ped_uri
         Array[String] cohort_prefixes
         File bed_file
-        File ref_fasta
         String merged_filename  # no file extension
         String relatedness_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_relatedness_check_v0.1.py"
         String plot_relatedness_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_relatedness_plot_v0.1.py"
@@ -56,10 +55,9 @@ workflow RelatednessCohortSet {
                     runtime_attr_override=runtime_attr_rename_vcf
             }
         }
-        call mergeVCFSamples.mergeVCFSamplesNormalize as mergeVCFSamples {
+        call mergeVCFSamples.mergeVCFSamples as mergeVCFSamples {
             input:
             vcf_files=renameVCFSamplesWithCohort.renamed_vcf_file,
-            ref_fasta=ref_fasta,
             output_vcf_name=merged_filename+'.vcf.gz',
             sv_base_mini_docker=sv_base_mini_docker,
             recalculate_af=true,

@@ -179,10 +179,9 @@ task mergeVCFs {
     }
 }
 
-task mergeVCFSamplesNormalize {
+task mergeVCFSamples {
     input {
         Array[File] vcf_files
-        File ref_fasta
         String output_vcf_name
         String sv_base_mini_docker
         Boolean recalculate_af=false
@@ -223,29 +222,23 @@ task mergeVCFSamplesNormalize {
     VCFS="~{write_lines(vcf_files)}"
     cat $VCFS | awk -F '/' '{print $NF"\t"$0}' | sort -k1,1V | awk '{print $2}' > vcfs_sorted.list
 
-    # Normalize each VCF (split multiallelics, left-align indels), then drop AF
-    clean_vcfs=""
-    for vcf in $(cat vcfs_sorted.list); do
-        base=$(basename $vcf .vcf.gz)
-        norm_vcf=${base}.norm.vcf.gz
-        clean_vcf=${base}.clean.vcf.gz
+    # Optionally drop AF from each VCF if we are going to recalc later
+    if [ "~{recalculate_af}" = "true" ]; then
+        clean_vcfs=""
+        for vcf in $(cat vcfs_sorted.list); do
+            base=$(basename $vcf .vcf.gz)
+            clean_vcf=${base}.clean.vcf.gz
+            bcftools annotate -x INFO/AF,FORMAT/AF -Oz -o $clean_vcf $vcf
+            tabix $clean_vcf
+            clean_vcfs="$clean_vcfs $clean_vcf"
+        done
+        printf "%s\n" $clean_vcfs > vcfs_use.list
+    else
+        cp vcfs_sorted.list vcfs_use.list
+    fi
 
-        # Normalize
-        bcftools norm -m -both -f ~{ref_fasta} -Oz -o $norm_vcf $vcf
-        tabix $norm_vcf
-
-        # Drop AF from both INFO and FORMAT
-        bcftools annotate -x INFO/AF,FORMAT/AF -Oz -o $clean_vcf $norm_vcf
-        tabix $clean_vcf
-
-        clean_vcfs="$clean_vcfs $clean_vcf"
-    done
-
-    # Write cleaned VCFs to new list
-    printf "%s\n" $clean_vcfs > vcfs_clean.list
-
-    # Merge cleaned VCFs
-    bcftools merge -m none -Oz -o ~{output_vcf_name} --file-list vcfs_clean.list
+    # Merge VCFs
+    bcftools merge -m none -Oz -o ~{output_vcf_name} --file-list vcfs_use.list
 
     if [ "~{fill_missing}" = "true" ]; then
         mv ~{output_vcf_name} tmp_~{output_vcf_name}
