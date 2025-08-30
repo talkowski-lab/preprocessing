@@ -62,7 +62,7 @@ workflow RelatednessCohortSet {
             ref_fasta=ref_fasta,
             output_vcf_name=merged_filename+'.vcf.gz',
             sv_base_mini_docker=sv_base_mini_docker,
-            recalculate_af=false,
+            recalculate_af=true,
             runtime_attr_override=runtime_attr_merge_vcfs
         }
     }

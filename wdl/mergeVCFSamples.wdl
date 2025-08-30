@@ -223,21 +223,29 @@ task mergeVCFSamplesNormalize {
     VCFS="~{write_lines(vcf_files)}"
     cat $VCFS | awk -F '/' '{print $NF"\t"$0}' | sort -k1,1V | awk '{print $2}' > vcfs_sorted.list
 
-    # Normalize each VCF (split multiallelics, left-align indels)
-    norm_vcfs=""
+    # Normalize each VCF (split multiallelics, left-align indels), then drop AF
+    clean_vcfs=""
     for vcf in $(cat vcfs_sorted.list); do
         base=$(basename $vcf .vcf.gz)
         norm_vcf=${base}.norm.vcf.gz
+        clean_vcf=${base}.clean.vcf.gz
+
+        # Normalize
         bcftools norm -m -both -f ~{ref_fasta} -Oz -o $norm_vcf $vcf
         tabix $norm_vcf
-        norm_vcfs="$norm_vcfs $norm_vcf"
+
+        # Drop AF from both INFO and FORMAT
+        bcftools annotate -x INFO/AF,FORMAT/AF -Oz -o $clean_vcf $norm_vcf
+        tabix $clean_vcf
+
+        clean_vcfs="$clean_vcfs $clean_vcf"
     done
 
-    # Write normalized VCFs to new list
-    printf "%s\n" $norm_vcfs > vcfs_norm.list
+    # Write cleaned VCFs to new list
+    printf "%s\n" $clean_vcfs > vcfs_clean.list
 
-    # Merge normalized VCFs
-    bcftools merge -m none -Oz -o ~{output_vcf_name} --file-list vcfs_norm.list
+    # Merge cleaned VCFs
+    bcftools merge -m none -Oz -o ~{output_vcf_name} --file-list vcfs_clean.list
 
     if [ "~{fill_missing}" = "true" ]; then
         mv ~{output_vcf_name} tmp_~{output_vcf_name}
