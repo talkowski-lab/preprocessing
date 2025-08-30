@@ -184,6 +184,7 @@ task mergeVCFSamples {
         Array[File] vcf_files
         String output_vcf_name
         String sv_base_mini_docker
+        Boolean drop_info_fields=false
         Boolean recalculate_af=false
         Boolean fill_missing=false
         RuntimeAttr? runtime_attr_override
@@ -222,17 +223,29 @@ task mergeVCFSamples {
     VCFS="~{write_lines(vcf_files)}"
     cat $VCFS | awk -F '/' '{print $NF"\t"$0}' | sort -k1,1V | awk '{print $2}' > vcfs_sorted.list
 
-    # Optionally drop AF from each VCF if we are going to recalc later
-    if [ "~{recalculate_af}" = "true" ]; then
+    # Decide preprocessing of VCFs
+    if [ "~{drop_info_fields}" = "true" ]; then
         clean_vcfs=""
         for vcf in $(cat vcfs_sorted.list); do
             base=$(basename $vcf .vcf.gz)
-            clean_vcf=${base}.clean.vcf.gz
+            clean_vcf=${base}.noINFO.vcf.gz
+            bcftools annotate -x INFO -Oz -o $clean_vcf $vcf
+            tabix $clean_vcf
+            clean_vcfs="$clean_vcfs $clean_vcf"
+        done
+        printf "%s\n" $clean_vcfs > vcfs_use.list
+
+    elif [ "~{recalculate_af}" = "true" ]; then
+        clean_vcfs=""
+        for vcf in $(cat vcfs_sorted.list); do
+            base=$(basename $vcf .vcf.gz)
+            clean_vcf=${base}.noAF.vcf.gz
             bcftools annotate -x INFO/AF,FORMAT/AF -Oz -o $clean_vcf $vcf
             tabix $clean_vcf
             clean_vcfs="$clean_vcfs $clean_vcf"
         done
         printf "%s\n" $clean_vcfs > vcfs_use.list
+
     else
         cp vcfs_sorted.list vcfs_use.list
     fi
