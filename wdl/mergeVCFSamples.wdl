@@ -223,34 +223,40 @@ task mergeVCFSamples {
     VCFS="~{write_lines(vcf_files)}"
     cat $VCFS | awk -F '/' '{print $NF"\t"$0}' | sort -k1,1V | awk '{print $2}' > vcfs_sorted.list
 
-    # Decide preprocessing of VCFs
-    if [ "~{drop_info_fields}" = "true" ]; then
-        clean_vcfs=""
-        for vcf in $(cat vcfs_sorted.list); do
-            base=$(basename $vcf .vcf.gz)
-            clean_vcf=${base}.noINFO.vcf.gz
-            bcftools annotate -x INFO -Oz -o $clean_vcf $vcf
-            tabix $clean_vcf
-            clean_vcfs="$clean_vcfs $clean_vcf"
-        done
-        printf "%s\n" $clean_vcfs > vcfs_use.list
+    # Preprocess VCFs depending on options
+    processed_vcfs=""
+    for vcf in $(cat vcfs_sorted.list); do
+        base=$(basename $vcf .vcf.gz)
+        processed_vcf=${base}.proc.vcf.gz
 
-    elif [ "~{recalculate_af}" = "true" ]; then
-        clean_vcfs=""
-        for vcf in $(cat vcfs_sorted.list); do
-            base=$(basename $vcf .vcf.gz)
-            clean_vcf=${base}.noAF.vcf.gz
-            bcftools annotate -x INFO/AF,FORMAT/AF -Oz -o $clean_vcf $vcf
-            tabix $clean_vcf
-            clean_vcfs="$clean_vcfs $clean_vcf"
-        done
-        printf "%s\n" $clean_vcfs > vcfs_use.list
+        cmd="bcftools annotate"
 
-    else
-        cp vcfs_sorted.list vcfs_use.list
-    fi
+        # If drop_info_fields, drop all INFO
+        if [ "~{drop_info_fields}" = "true" ]; then
+            cmd="$cmd -x INFO"
+        fi
 
-    # Merge VCFs
+        # If recalculate_af, drop AF fields
+        if [ "~{recalculate_af}" = "true" ]; then
+            cmd="$cmd -x INFO/AF,FORMAT/AF"
+        fi
+
+        # If neither flag is true, just copy the file through
+        if [ "$cmd" = "bcftools annotate" ]; then
+            ln -s $vcf $processed_vcf
+            tabix -f $processed_vcf
+        else
+            $cmd -Oz -o $processed_vcf $vcf
+            tabix $processed_vcf
+        fi
+
+        processed_vcfs="$processed_vcfs $processed_vcf"
+    done
+
+    # Write processed VCFs to new list
+    printf "%s\n" $processed_vcfs > vcfs_use.list
+
+    # Merge processed VCFs
     bcftools merge -m none -Oz -o ~{output_vcf_name} --file-list vcfs_use.list
 
     if [ "~{fill_missing}" = "true" ]; then
