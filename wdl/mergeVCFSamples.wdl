@@ -238,7 +238,7 @@ task mergeVCFSamples {
 
         # If keep_gt_only, drop all FORMAT fields except GT
         if [ "~{keep_gt_only}" = "true" ]; then
-            cmd="$cmd -x FORMAT -I +FORMAT/GT"
+            cmd="$cmd -x FORMAT"
         fi
 
         # If no modifications, symlink original
