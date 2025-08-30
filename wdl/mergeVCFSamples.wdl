@@ -184,7 +184,7 @@ task mergeVCFSamples {
         Array[File] vcf_files
         String output_vcf_name
         String sv_base_mini_docker
-        Boolean drop_info_fields=false
+        Boolean keep_gt_only=false
         Boolean recalculate_af=false
         Boolean fill_missing=false
         RuntimeAttr? runtime_attr_override
@@ -231,17 +231,17 @@ task mergeVCFSamples {
 
         cmd="bcftools annotate"
 
-        # If drop_info_fields, drop all INFO
-        if [ "~{drop_info_fields}" = "true" ]; then
-            cmd="$cmd -x INFO"
-        fi
-
         # If recalculate_af, drop AF fields
         if [ "~{recalculate_af}" = "true" ]; then
             cmd="$cmd -x INFO/AF,FORMAT/AF"
         fi
 
-        # If neither flag is true, just copy the file through
+        # If keep_gt_only, drop all FORMAT fields except GT
+        if [ "~{keep_gt_only}" = "true" ]; then
+            cmd="$cmd -x FORMAT -I +FORMAT/GT"
+        fi
+
+        # If no modifications, symlink original
         if [ "$cmd" = "bcftools annotate" ]; then
             ln -s $vcf $processed_vcf
             tabix -f $processed_vcf
