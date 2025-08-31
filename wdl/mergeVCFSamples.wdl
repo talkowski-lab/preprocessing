@@ -184,7 +184,7 @@ task mergeVCFSamples {
         Array[File] vcf_files
         String output_vcf_name
         String sv_base_mini_docker
-        Boolean keep_gt_only=false
+        Boolean keep_gt_ad_dp_only=false
         Boolean recalculate_af=false
         Boolean fill_missing=false
         RuntimeAttr? runtime_attr_override
@@ -236,9 +236,9 @@ task mergeVCFSamples {
             cmd="$cmd -x INFO/AF,FORMAT/AF"
         fi
 
-        # If keep_gt_only, drop all FORMAT fields except GT
-        if [ "~{keep_gt_only}" = "true" ]; then
-            cmd="$cmd -x FORMAT"
+        # If keep_gt_ad_dp_only, drop all FORMAT fields except GT
+        if [ "~{keep_gt_ad_dp_only}" = "true" ]; then
+            cmd="$cmd -x ^FORMAT/GT,FORMAT/AD,FORMAT/DP"
         fi
 
         # If no modifications, symlink original

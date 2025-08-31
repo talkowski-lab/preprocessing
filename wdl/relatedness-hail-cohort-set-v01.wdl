@@ -60,7 +60,7 @@ workflow RelatednessCohortSet {
             vcf_files=renameVCFSamplesWithCohort.renamed_vcf_file,
             output_vcf_name=merged_filename+'.vcf.gz',
             sv_base_mini_docker=sv_base_mini_docker,
-            keep_gt_only=true,
+            keep_gt_ad_dp_only=true,
             recalculate_af=true,
             runtime_attr_override=runtime_attr_merge_vcfs
         }
