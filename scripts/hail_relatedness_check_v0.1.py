@@ -230,7 +230,8 @@ downsampled_unrelated = unrelated_in_ped.filter(unrelated_in_ped.relationship=='
 
 rel_total = related_in_ped.union(only_related).union(downsampled_unrelated)
 
-rel_total.export(f"{cohort_prefix}_kinship.tsv.gz", parallel='separate_header')
+# Export as file chunks
+rel_total.export(f"{cohort_prefix}_kinship.tsv.gz")
 
 # rel_df = rel_total.to_pandas()
 # rel_df.to_csv(f"{cohort_prefix}_kinship.tsv.gz", sep='\t', index=False)
