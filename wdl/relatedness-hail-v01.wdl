@@ -206,14 +206,28 @@ task checkRelatedness {
 
     command <<<
         set -eou pipefail
+        cpu_cores=$(nproc)
+        memory=$(awk '/MemTotal/ {printf "%.0f\n", $2/1024/1024}' /proc/meminfo)
+        
         curl ~{relatedness_qc_script} > check_relatedness.py
-        python3 check_relatedness.py ~{vcf_uri} ~{cohort_prefix} ~{ped_uri} ~{cpu_cores} ~{memory} \
+        python3 check_relatedness.py ~{vcf_uri} ~{cohort_prefix} ~{ped_uri} ${cpu_cores} ${memory} \
         ~{bucket_id} ~{score_table} ~{genome_build} ~{split_multi} > stdout
+
+        SHARD_DIR="~{cohort_prefix}_kinship.tsv.gz"
+        OUTPUT_FILE="~{cohort_prefix}_kinship.merged.tsv.gz"
+
+        # Extract header first
+        first_file=$(ls ${SHARD_DIR}/part-*.gz | sort | head -n 1)
+        zcat "$first_file" | head -n 1 | bgzip -c > $OUTPUT_FILE
+
+        # Stream remaining shards in parallel
+        ls ${SHARD_DIR}/part-*.gz | sort | tail -n +2 | \
+            xargs -n 1 -P ~{cpu_cores} -I {} sh -c 'zcat {} | tail -n +2 | bgzip -c' >> $OUTPUT_FILE
     >>>
 
     output {
         File relatedness_qc = cohort_prefix + "_relatedness_qc.ped"
-        File kinship_tsv = cohort_prefix + "_kinship.tsv.gz"
+        File kinship_tsv = cohort_prefix + "_kinship.merged.tsv.gz"
     }
 }
 
