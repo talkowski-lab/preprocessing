@@ -31,6 +31,9 @@ score_table = sys.argv[7]
 genome_build = sys.argv[8]
 split_multi = ast.literal_eval(sys.argv[9].capitalize())
 
+print(f"Using CPU cores: {cores}")
+print(f"Using memory: {mem} GB")
+
 hl.init(min_block_size=128, 
         local=f"local[*]", 
         spark_conf={

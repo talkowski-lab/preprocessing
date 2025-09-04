@@ -208,8 +208,6 @@ task checkRelatedness {
         set -eou pipefail
         cpu_cores=$(nproc)
         memory=$(awk '/MemTotal/ {printf "%.0f\n", $2/1024/1024}' /proc/meminfo)
-        echo "Total CPU cores: $cpu_cores"
-        echo "Total memory: $memory GB"
 
         curl ~{relatedness_qc_script} > check_relatedness.py
         python3 check_relatedness.py ~{vcf_uri} ~{cohort_prefix} ~{ped_uri} ${cpu_cores} ${memory} \
