@@ -22,9 +22,9 @@ workflow gCNV_BEDtoVCF {
         Array[String] row_key = ['rsid']  # variant_name renamed
         Array[String] col_key = ['sample']
         Array[String] skip_fields = ['chr','start']  # removed and replaced with locus in Hail
-        Array[String] col_fields = ['PASS_SAMPLE']
+        Array[String] col_fields = []
         Array[String] entry_fields = ['name', 'GT', 'CN', 'QA', 'QS', 'QSE', 'QSS', 'ploidy', 'strand',
-            'ID', 'defragmented', 'PASS_QS']
+            'ID', 'defragmented', 'PASS_QS', 'PASS_SAMPLE']
         Array[String] priority_row_fields = ['END','SVTYPE','SVLEN']
 
         RuntimeAttr? runtime_attr_hail_bed_to_vcf
