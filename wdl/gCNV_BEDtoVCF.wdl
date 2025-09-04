@@ -23,7 +23,7 @@ workflow gCNV_BEDtoVCF {
         Array[String] col_key = ['sample']
         Array[String] skip_fields = ['chr','start']  # removed and replaced with locus in Hail
         Array[String] col_fields = ['PASS_SAMPLE']
-        Array[String] entry_fields = ['name', 'GT', 'QA', 'QS', 'QSE', 'QSS', 'ploidy', 'strand',
+        Array[String] entry_fields = ['name', 'GT', 'CN', 'QA', 'QS', 'QSE', 'QSS', 'ploidy', 'strand',
             'ID', 'defragmented', 'PASS_QS']
         Array[String] priority_row_fields = ['END','SVTYPE','SVLEN']
 
