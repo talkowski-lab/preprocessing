@@ -38,7 +38,9 @@ hl.init(min_block_size=128,
         local=f"local[*]", 
         spark_conf={
                     "spark.driver.memory": f"{int(np.floor(mem*0.8))}g",
-                    "spark.speculation": 'true'
+                    "spark.speculation": 'true',
+                    "spark.rpc.askTimeout": '600s',
+                    "spark.network.timeout": '600s'
                     }, 
         tmp_dir="tmp", local_tmpdir="tmp",
                     )
