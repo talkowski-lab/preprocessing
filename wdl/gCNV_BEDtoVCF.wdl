@@ -19,13 +19,12 @@ workflow gCNV_BEDtoVCF {
 
         String genome_build = 'GRCh38'
 
-        Array[String] row_key = ['rsid']
-        Array[String] col_key = ['sample_fix']
-        Array[String] skip_fields = ['chr','start']  # removed
-        Array[String] col_fields = ['sample']
-        Array[String] entry_fields = ['name', 'GT', 'CN', 'NP', 'QA', 'QS', 'QSE', 'QSS', 'ploidy', 'strand',
-            'ID', 'defragmented', 'sf', 'sc', 'PASS_SAMPLE',
-            'PASS_FREQ', 'PASS_QS', 'HIGH_QUALITY']
+        Array[String] row_key = ['rsid']  # variant_name renamed
+        Array[String] col_key = ['sample']
+        Array[String] skip_fields = ['chr','start']  # removed and replaced with locus in Hail
+        Array[String] col_fields = ['PASS_SAMPLE']
+        Array[String] entry_fields = ['name', 'GT', 'QA', 'QS', 'QSE', 'QSS', 'ploidy', 'strand',
+            'ID', 'defragmented', 'PASS_QS']
         Array[String] priority_row_fields = ['END','SVTYPE','SVLEN']
 
         RuntimeAttr? runtime_attr_hail_bed_to_vcf
