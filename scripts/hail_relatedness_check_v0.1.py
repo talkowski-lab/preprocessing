@@ -110,26 +110,36 @@ ped = ped[ped.sample_id.isin(vcf_samps)].copy()
 # Get the number of individuals in each family
 fam_sizes = ped.family_id.value_counts().to_dict()
 
-# Create dictionaries mapping sample_id to paternal/maternal_id (excluding missing values)
-fathers = ped[~ped.paternal_id.isin(['0', '-9'])].set_index('sample_id').paternal_id.to_dict()
-mothers = ped[~ped.maternal_id.isin(['0', '-9'])].set_index('sample_id').maternal_id.to_dict()
-
-def get_sample_role(row):
-    if fam_sizes[row.family_id] == 1:
-        return 'Singleton'
-    elif row.maternal_id == '0' and row.paternal_id == '0':
-        if row.sample_id in fathers.values() or row.sex == 1:
-            return 'Father'
-        elif row.sample_id in mothers.values() or row.sex == 2:
-            return 'Mother'
-        else:
-            return 'Unknown'
-    else:
-        return 'Proband'
+# Create sets for fast membership tests
+fathers_set = set(ped.loc[~ped.paternal_id.isin(['0', '-9']), 'paternal_id'])
+mothers_set = set(ped.loc[~ped.maternal_id.isin(['0', '-9']), 'maternal_id'])
 
 if not ped.empty:
     # Apply role assignment to each row
-    ped['role'] = ped.apply(get_sample_role, axis=1)
+    roles = []
+
+    for i, row in enumerate(ped.itertuples(index=False), start=1):
+        fam_size = fam_sizes[row.family_id]
+
+        if fam_size == 1:
+            role = 'Singleton'
+        elif row.maternal_id == '0' and row.paternal_id == '0':
+            if row.sample_id in fathers_set or row.sex == 1:
+                role = 'Father'
+            elif row.sample_id in mothers_set or row.sex == 2:
+                role = 'Mother'
+            else:
+                role = 'Unknown'
+        else:
+            role = 'Proband'
+
+        roles.append(role)
+
+        if i % 500 == 0:
+            print(f"Processed {i} rows")
+
+    # Assign roles back to the DataFrame
+    ped['role'] = roles
 
     ped_ht = hl.Table.from_pandas(ped)
 
