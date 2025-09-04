@@ -211,7 +211,7 @@ task checkRelatedness {
 
         curl ~{relatedness_qc_script} > check_relatedness.py
         python3 check_relatedness.py ~{vcf_uri} ~{cohort_prefix} ~{ped_uri} ${cpu_cores} ${memory} \
-        ~{bucket_id} ~{score_table} ~{genome_build} ~{split_multi} > stdout
+        ~{bucket_id} ~{score_table} ~{genome_build} ~{split_multi}
     >>>
 
     output {
