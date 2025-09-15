@@ -126,7 +126,8 @@ vcf_samps = mt.s.collect()
 ped = ped[ped.index.isin(vcf_samps)].copy()
 
 ped_qc = pd.concat([ped, sample_qc_df], axis=1).reset_index()
-ped_qc = ped_qc.fillna(np.nan)
+# ped_qc = ped_qc.fillna(np.nan)  # broke for some reason
+ped_qc = ped_qc.replace({pd.NA: None}).replace({None: np.nan})
 ped_qc['ped_sex'] = ped_qc.sex
 ped_qc['sex'] = ped_qc.apply(predict_sex, axis=1).astype('category')
 ped_qc = ped_qc[base_cols + ['ped_sex'] + np.setdiff1d(sample_qc_df.columns, base_cols).tolist()]
