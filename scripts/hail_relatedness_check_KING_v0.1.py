@@ -30,6 +30,7 @@ bucket_id = sys.argv[6]
 score_table = sys.argv[7]  # TODO: REMOVE THIS OUTPUT (only here for compatibility with PC-Relate WDL task)
 genome_build = sys.argv[8]
 split_multi = ast.literal_eval(sys.argv[9].capitalize())
+kinship_ht_uri = sys.argv[10]  # optional
 
 hl.init(min_block_size=128, 
         local=f"local[*]", 
@@ -107,6 +108,10 @@ rel = ibd_ht.annotate(phi=king_ht[ibd_ht.key].phi).flatten().key_by('i','j')
 # ANNOTATE RELATIONSHIP USING PC-RELATE CUTOFFS
 rel = rel.annotate(relationship=relatedness.get_relationship_expr(kin_expr = rel.phi, ibd0_expr = rel['ibd.Z0'], 
                                                             ibd1_expr = rel['ibd.Z1'], ibd2_expr = rel['ibd.Z2']))
+
+# Optionally write HT
+if kinship_ht_uri!='NA':
+    rel = rel.checkpoint(kinship_ht_uri, overwrite=True)
 
 ped = pd.read_csv(ped_uri, sep='\t').iloc[:, :6]
 ped.columns = ['family_id', 'sample_id', 'paternal_id', 'maternal_id', 'sex', 'phenotype']

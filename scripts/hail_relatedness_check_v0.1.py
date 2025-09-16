@@ -30,6 +30,7 @@ bucket_id = sys.argv[6]
 score_table = sys.argv[7]
 genome_build = sys.argv[8]
 split_multi = ast.literal_eval(sys.argv[9].capitalize())
+kinship_ht_uri = sys.argv[10]  # optional
 
 print(f"Using CPU cores: {cores}")
 print(f"Using memory: {mem} GB")
@@ -88,6 +89,10 @@ rel = rel.annotate(relationship = relatedness.get_relationship_expr(rel.kin, rel
 )
 rel = rel.key_by()
 rel = rel.annotate(i=rel.i.s, j=rel.j.s).key_by('i','j')
+
+# Optionally write HT
+if kinship_ht_uri!='NA':
+    rel = rel.checkpoint(kinship_ht_uri, overwrite=True)
 
 # filename = f"{bucket_id}/hail/relatedness/{str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M'))}/{cohort_prefix}_pc_relate.ht"
 # rel.write(filename)
