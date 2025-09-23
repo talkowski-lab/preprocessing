@@ -81,6 +81,10 @@ else:
     mt = mt.annotate_cols(scores=score_table_som[mt.s].scores)
     rel = hl.pc_relate(mt.GT, 0.01, scores_expr=mt.scores)
 
+# Optionally write HT
+if kinship_ht_uri!='NA':
+    rel = rel.checkpoint(kinship_ht_uri, overwrite=True)
+
 rel = rel.annotate(relationship = relatedness.get_relationship_expr(rel.kin, rel.ibd0, rel.ibd1, rel.ibd2, 
                                                    first_degree_kin_thresholds=(0.19, 0.4), second_degree_min_kin=0.1, 
                                                    ibd0_0_max=0.2, ibd0_25_thresholds=(0.2, 0.425), ibd1_0_thresholds=(-0.15, 0.1), 
@@ -89,10 +93,6 @@ rel = rel.annotate(relationship = relatedness.get_relationship_expr(rel.kin, rel
 )
 rel = rel.key_by()
 rel = rel.annotate(i=rel.i.s, j=rel.j.s).key_by('i','j')
-
-# Optionally write HT
-if kinship_ht_uri!='NA':
-    rel = rel.checkpoint(kinship_ht_uri, overwrite=True)
 
 # filename = f"{bucket_id}/hail/relatedness/{str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M'))}/{cohort_prefix}_pc_relate.ht"
 # rel.write(filename)
