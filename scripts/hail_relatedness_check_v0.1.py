@@ -31,6 +31,7 @@ score_table = sys.argv[7]
 genome_build = sys.argv[8]
 split_multi = ast.literal_eval(sys.argv[9].capitalize())
 kinship_ht_uri = sys.argv[10]  # optional
+presaved_kinship_ht_uri = sys.argv[11]  # optional
 
 print(f"Using CPU cores: {cores}")
 print(f"Using memory: {mem} GB")
@@ -82,9 +83,12 @@ else:
     rel = hl.pc_relate(mt.GT, 0.01, scores_expr=mt.scores)
 
 # Optionally write HT
-if kinship_ht_uri!='NA':
+if kinship_ht_uri!='NA' and presaved_kinship_ht_uri!=kinship_ht_uri:
     rel = rel.checkpoint(kinship_ht_uri, overwrite=True)
 
+if presaved_kinship_ht_uri!='NA':
+    rel = hl.read_table(presaved_kinship_ht_uri)
+    
 rel = rel.annotate(relationship = relatedness.get_relationship_expr(rel.kin, rel.ibd0, rel.ibd1, rel.ibd2, 
                                                    first_degree_kin_thresholds=(0.19, 0.4), second_degree_min_kin=0.1, 
                                                    ibd0_0_max=0.2, ibd0_25_thresholds=(0.2, 0.425), ibd1_0_thresholds=(-0.15, 0.1), 
