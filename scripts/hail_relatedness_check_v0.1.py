@@ -75,19 +75,20 @@ mt = hl.import_vcf(vcf_uri, reference_genome=genome_build, force_bgz=True, call_
 if split_multi:
     mt = split_multi_ssc(mt)
 
-if score_table=='false':
-    rel = hl.pc_relate(mt.GT, 0.01, k=10)
-else:
-    score_table_som = hl.read_table(score_table)
-    mt = mt.annotate_cols(scores=score_table_som[mt.s].scores)
-    rel = hl.pc_relate(mt.GT, 0.01, scores_expr=mt.scores)
+if presaved_kinship_ht_uri!='NA':
+    rel = hl.read_table(presaved_kinship_ht_uri)
+
+elif presaved_kinship_ht_uri=='NA':
+    if score_table=='false':
+        rel = hl.pc_relate(mt.GT, 0.01, k=10)
+    else:
+        score_table_som = hl.read_table(score_table)
+        mt = mt.annotate_cols(scores=score_table_som[mt.s].scores)
+        rel = hl.pc_relate(mt.GT, 0.01, scores_expr=mt.scores)
 
 # Optionally write HT
 if kinship_ht_uri!='NA' and presaved_kinship_ht_uri!=kinship_ht_uri:
     rel = rel.checkpoint(kinship_ht_uri, overwrite=True)
-
-if presaved_kinship_ht_uri!='NA':
-    rel = hl.read_table(presaved_kinship_ht_uri)
     
 rel = rel.annotate(relationship = relatedness.get_relationship_expr(rel.kin, rel.ibd0, rel.ibd1, rel.ibd2, 
                                                    first_degree_kin_thresholds=(0.19, 0.4), second_degree_min_kin=0.1, 
