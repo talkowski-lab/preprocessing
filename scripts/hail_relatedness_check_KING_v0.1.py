@@ -31,6 +31,8 @@ score_table = sys.argv[7]  # TODO: REMOVE THIS OUTPUT (only here for compatibili
 genome_build = sys.argv[8]
 split_multi = ast.literal_eval(sys.argv[9].capitalize())
 kinship_ht_uri = sys.argv[10]  # optional
+presaved_kinship_ht_uri = sys.argv[11]  # optional
+downsampled_unrelated_proportion = float(sys.argv[12])
 
 hl.init(min_block_size=128, 
         local=f"local[*]", 
@@ -69,13 +71,6 @@ mt = hl.import_vcf(vcf_uri, reference_genome=genome_build, force_bgz=True, call_
 if split_multi:
     mt = split_multi_ssc(mt)
 
-# RUN KING AND IDENTITY_BY_DESCENT
-king_mt = hl.king(mt.GT)
-king_ht = king_mt.entries().rename({'s_1':'i', 's':'j'}).key_by('i','j')
-
-ibd_ht = hl.identity_by_descent(mt)
-
-rel = ibd_ht.annotate(phi=king_ht[ibd_ht.key].phi).flatten().key_by('i','j')
 
 # ANNOTATE RELATIONSHIP FIELD USING KING HARD CUTOFFS
 # SOURCE 1: https://www.cog-genomics.org/plink/2.0/distance#king_coefs
@@ -105,12 +100,24 @@ rel = ibd_ht.annotate(phi=king_ht[ibd_ht.key].phi).flatten().key_by('i','j')
 #                  .when(rel.phi >= king_cutoffs['unrelated'][0], 'unrelated')
 #                  .or_missing())
 
-# ANNOTATE RELATIONSHIP USING PC-RELATE CUTOFFS
-rel = rel.annotate(relationship=relatedness.get_relationship_expr(kin_expr = rel.phi, ibd0_expr = rel['ibd.Z0'], 
-                                                            ibd1_expr = rel['ibd.Z1'], ibd2_expr = rel['ibd.Z2']))
+if presaved_kinship_ht_uri!='NA':
+    rel = hl.read_table(presaved_kinship_ht_uri)
+
+if presaved_kinship_ht_uri=='NA':
+    # RUN KING AND IDENTITY_BY_DESCENT
+    king_mt = hl.king(mt.GT)
+    king_ht = king_mt.entries().rename({'s_1':'i', 's':'j'}).key_by('i','j')
+
+    ibd_ht = hl.identity_by_descent(mt)
+
+    rel = ibd_ht.annotate(phi=king_ht[ibd_ht.key].phi).flatten().key_by('i','j')
+
+    # ANNOTATE RELATIONSHIP USING PC-RELATE CUTOFFS
+    rel = rel.annotate(relationship=relatedness.get_relationship_expr(kin_expr = rel.phi, ibd0_expr = rel['ibd.Z0'], 
+                                                                ibd1_expr = rel['ibd.Z1'], ibd2_expr = rel['ibd.Z2']))
 
 # Optionally write HT
-if kinship_ht_uri!='NA':
+if kinship_ht_uri!='NA' and presaved_kinship_ht_uri!=kinship_ht_uri:
     rel = rel.checkpoint(kinship_ht_uri, overwrite=True)
 
 ped = pd.read_csv(ped_uri, sep='\t').iloc[:, :6]
@@ -223,7 +230,7 @@ related_in_ped = related_in_ped.filter(hl.is_missing(related_in_ped.ped_relation
 
 unrelated_in_ped = rel_merged.anti_join(related_in_ped).annotate(ped_relationship='unrelated')
 
-p = 0.05
+p = downsampled_unrelated_proportion
 only_related = unrelated_in_ped.filter(unrelated_in_ped.relationship!='unrelated')
 downsampled_unrelated = unrelated_in_ped.filter(unrelated_in_ped.relationship=='unrelated').sample(p)
 

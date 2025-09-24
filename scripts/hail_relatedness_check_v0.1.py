@@ -32,7 +32,7 @@ genome_build = sys.argv[8]
 split_multi = ast.literal_eval(sys.argv[9].capitalize())
 kinship_ht_uri = sys.argv[10]  # optional
 presaved_kinship_ht_uri = sys.argv[11]  # optional
-downsampled_unrelated_proportion = float(sys.argv[11])
+downsampled_unrelated_proportion = float(sys.argv[12])
 
 print(f"Using CPU cores: {cores}")
 print(f"Using memory: {mem} GB")
