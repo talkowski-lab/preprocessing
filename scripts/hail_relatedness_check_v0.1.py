@@ -32,6 +32,7 @@ genome_build = sys.argv[8]
 split_multi = ast.literal_eval(sys.argv[9].capitalize())
 kinship_ht_uri = sys.argv[10]  # optional
 presaved_kinship_ht_uri = sys.argv[11]  # optional
+downsampled_unrelated_proportion = float(sys.argv[11])
 
 print(f"Using CPU cores: {cores}")
 print(f"Using memory: {mem} GB")
@@ -239,7 +240,7 @@ related_in_ped = related_in_ped.filter(hl.is_missing(related_in_ped.ped_relation
 
 unrelated_in_ped = rel_merged.anti_join(related_in_ped).annotate(ped_relationship='unrelated')
 
-p = 0.05
+p = downsampled_unrelated_proportion
 only_related = unrelated_in_ped.filter(unrelated_in_ped.relationship!='unrelated')
 downsampled_unrelated = unrelated_in_ped.filter(unrelated_in_ped.relationship=='unrelated').sample(p)
 

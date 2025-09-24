@@ -30,6 +30,7 @@ workflow Relatedness {
         String y_metric='kin'
         String kinship_ht_uri='NA'  # optionally write intermediate kinship HT
         String presaved_kinship_ht_uri='NA'  # optionally load saved intermediate kinship HT
+        Float downsampled_unrelated_proportion=0.05
         Int chunk_size=0
         Boolean sort_after_merge=false
         Boolean split_multi=true
@@ -91,6 +92,7 @@ workflow Relatedness {
         score_table=false,
         kinship_ht_uri=kinship_ht_uri,
         presaved_kinship_ht_uri=presaved_kinship_ht_uri,
+        downsampled_unrelated_proportion=downsampled_unrelated_proportion,
         runtime_attr_override=runtime_attr_check_relatedness
     }
 
@@ -178,6 +180,7 @@ task checkRelatedness {
         String genome_build
         String kinship_ht_uri
         String presaved_kinship_ht_uri
+        Float downsampled_unrelated_proportion
         String score_table=false
         Boolean split_multi=true
         RuntimeAttr? runtime_attr_override
@@ -217,7 +220,7 @@ task checkRelatedness {
 
         curl ~{relatedness_qc_script} > check_relatedness.py
         python3 check_relatedness.py ~{vcf_uri} ~{cohort_prefix} ~{ped_uri} ${cpu_cores} ${memory} \
-        ~{bucket_id} ~{score_table} ~{genome_build} ~{split_multi} ~{kinship_ht_uri} ~{presaved_kinship_ht_uri}
+        ~{bucket_id} ~{score_table} ~{genome_build} ~{split_multi} ~{kinship_ht_uri} ~{presaved_kinship_ht_uri} ~{downsampled_unrelated_proportion}
     >>>
 
     output {
