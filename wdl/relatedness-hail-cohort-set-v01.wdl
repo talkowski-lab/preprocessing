@@ -31,6 +31,7 @@ workflow RelatednessCohortSet {
         String x_metric='ibd0'
         String y_metric='kin'
         String kinship_field='kin'  # for sorting in removeDuplicates
+        Float downsampled_unrelated_proportion=0.05
         Int chunk_size=100000
         Int samples_per_chunk=0
         Boolean sort_after_merge=false
@@ -99,6 +100,7 @@ workflow RelatednessCohortSet {
             split_multi=split_multi,
             kinship_ht_uri='NA',
             presaved_kinship_ht_uri='NA',
+            downsampled_unrelated_proportion=downsampled_unrelated_proportion,
             runtime_attr_subset_vcfs=runtime_attr_subset_vcfs,
             runtime_attr_merge_vcfs=runtime_attr_merge_vcfs,
             runtime_attr_impute_sex=runtime_attr_impute_sex,
@@ -128,6 +130,7 @@ workflow RelatednessCohortSet {
             kinship_field=kinship_field,
             kinship_ht_uri='NA',
             presaved_kinship_ht_uri='NA',
+            downsampled_unrelated_proportion=downsampled_unrelated_proportion,
             chunk_size=chunk_size,
             sort_after_merge=sort_after_merge,
             split_multi=split_multi,

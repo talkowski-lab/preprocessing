@@ -35,6 +35,7 @@ workflow Relatedness {
         String kinship_field='kin'  # for sorting in removeDuplicates
         String kinship_ht_uri='NA'  # optionally write intermediate kinship HT
         String presaved_kinship_ht_uri='NA'  # optionally load saved intermediate kinship HT
+        Float downsampled_unrelated_proportion=0.05
         Boolean sort_after_merge=false
         Boolean split_multi=true
         Boolean impute_sex=true
@@ -128,6 +129,7 @@ workflow Relatedness {
             score_table=HailPCA.score_table,
             kinship_ht_uri=kinship_ht_uri,
             presaved_kinship_ht_uri=presaved_kinship_ht_uri,
+            downsampled_unrelated_proportion=downsampled_unrelated_proportion,
             genome_build=genome_build,
             split_multi=split_multi,
             runtime_attr_override=runtime_attr_check_relatedness
