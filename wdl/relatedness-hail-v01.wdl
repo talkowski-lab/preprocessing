@@ -225,7 +225,7 @@ task checkRelatedness {
 
     output {
         File relatedness_qc = cohort_prefix + "_relatedness_qc.ped"
-        File kinship_tsv = cohort_prefix + "_kinship.tsv.gz"
+        File kinship_tsv = cohort_prefix + "_kinship.tsv.bgz"
     }
 }
 

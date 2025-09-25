@@ -247,8 +247,20 @@ if p!=0:
 else:
     rel_total = related_in_ped_or_inferred_related
     
+rel_total = rel_total.repartition(1000)
+
+# Write to intermediate HT before TSV export
+annot_kinship_ht_uri = 'NA'
+if presaved_kinship_ht_uri!='NA':
+    annot_kinship_ht_uri = f"{presaved_kinship_ht_uri.split('.ht')[0]}.annot.related.downsampled.ht"
+elif kinship_ht_uri!='NA':
+    annot_kinship_ht_uri = f"{kinship_ht_uri.split('.ht')[0]}.annot.related.downsampled.ht"
+if annot_kinship_ht_uri!='NA':
+    rel_total.write(annot_kinship_ht_uri, overwrite=True)
+    print(f"Annotated kinship HT saved to:\n{annot_kinship_ht_uri}")
+
 # Export as gzipped TSV
-rel_total.repartition(1000).export(f"{cohort_prefix}_kinship.tsv.gz")
+rel_total.export(f"{cohort_prefix}_kinship.tsv.bgz")
 
 # rel_df = rel_total.to_pandas()
 # rel_df.to_csv(f"{cohort_prefix}_kinship.tsv.gz", sep='\t', index=False)

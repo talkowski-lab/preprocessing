@@ -311,7 +311,7 @@ task removeDuplicates {
     kinship_field = sys.argv[4]
 
     chunks = []
-    for chunk in pd.read_csv(kinship_tsv, sep='\t', chunksize=chunk_size):
+    for chunk in pd.read_csv(kinship_tsv, sep='\t', chunksize=chunk_size, compression="gzip"):
         chunks.append(chunk)
     kinship_df = pd.concat(chunks)
     kinship_df['pair'] = kinship_df[['i','j']].astype(str).agg(lambda lst: ','.join(sorted(lst)), axis=1)

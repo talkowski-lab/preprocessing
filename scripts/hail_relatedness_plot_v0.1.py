@@ -14,10 +14,10 @@ x_metric = sys.argv[5]
 y_metric = sys.argv[6]
 
 if chunk_size==0:
-    rel_df = pd.read_csv(rel_tsv, sep='\t')
+    rel_df = pd.read_csv(rel_tsv, sep='\t', compression="gzip")
 else:    
     chunks = []
-    for chunk in pd.read_csv(rel_tsv, sep='\t', chunksize=chunk_size):
+    for chunk in pd.read_csv(rel_tsv, sep='\t', chunksize=chunk_size, compression="gzip"):
         chunks.append(chunk)
     rel_df = pd.concat(chunks)
 
