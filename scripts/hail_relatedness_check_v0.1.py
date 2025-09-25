@@ -249,6 +249,10 @@ else:
     
 rel_total = rel_total.repartition(1000)
 
+# Fill missing ped_relationship with unrelated
+rel_total = rel_total.annotate(ped_relationship=hl.if_else(hl.is_defined(rel_total.ped_relationship), 
+                                                                 rel_total.ped_relationship, 'unrelated'))
+
 # Write to intermediate HT before TSV export
 annot_kinship_ht_uri = 'NA'
 if presaved_kinship_ht_uri!='NA':
