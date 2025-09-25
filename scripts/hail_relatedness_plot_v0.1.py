@@ -19,7 +19,8 @@ else:
     chunks = []
     for chunk in pd.read_csv(rel_tsv, sep='\t', chunksize=chunk_size, compression="gzip"):
         chunks.append(chunk)
-    rel_df = pd.concat(chunks)
+    # Post-hoc replace missing
+    rel_df = pd.concat(chunks).fillna('unrelated')
 
 fig, ax = plt.subplots(1, 2, figsize=(12, 5));
 fig.suptitle(cohort_prefix);
