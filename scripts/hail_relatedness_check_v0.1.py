@@ -256,7 +256,7 @@ if presaved_kinship_ht_uri!='NA':
 elif kinship_ht_uri!='NA':
     annot_kinship_ht_uri = f"{kinship_ht_uri.split('.ht')[0]}.annot.related.downsampled.ht"
 if annot_kinship_ht_uri!='NA':
-    rel_total.write(annot_kinship_ht_uri, overwrite=True)
+    rel_total = rel_total.checkpoint(annot_kinship_ht_uri, overwrite=True)
     print(f"Annotated kinship HT saved to:\n{annot_kinship_ht_uri}")
 
 # Export as gzipped TSV
