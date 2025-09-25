@@ -252,9 +252,9 @@ rel_total = rel_total.repartition(1000)
 # Write to intermediate HT before TSV export
 annot_kinship_ht_uri = 'NA'
 if presaved_kinship_ht_uri!='NA':
-    annot_kinship_ht_uri = f"{presaved_kinship_ht_uri.split('.ht')[0]}.annot.related.downsampled.ht"
+    annot_kinship_ht_uri = f"{presaved_kinship_ht_uri.split('.ht')[0]}.annot.related.downsampled.{p}.ht"
 elif kinship_ht_uri!='NA':
-    annot_kinship_ht_uri = f"{kinship_ht_uri.split('.ht')[0]}.annot.related.downsampled.ht"
+    annot_kinship_ht_uri = f"{kinship_ht_uri.split('.ht')[0]}.annot.related.downsampled.{p}.ht"
 if annot_kinship_ht_uri!='NA':
     rel_total = rel_total.checkpoint(annot_kinship_ht_uri, overwrite=True)
     print(f"Annotated kinship HT saved to:\n{annot_kinship_ht_uri}")
