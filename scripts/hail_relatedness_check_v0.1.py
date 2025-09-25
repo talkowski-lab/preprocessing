@@ -230,24 +230,22 @@ ped_rels_ht = hl.Table.from_pandas(ped_rels_df)
 ped_rels_ht_merged = ped_rels_ht.annotate(i=ped_rels_ht.j, j=ped_rels_ht.i).key_by('i', 'j').union(ped_rels_ht.key_by('i','j'))
 
 rel_merged = rel.key_by()
-rel_merged = rel_merged.annotate(i=rel_merged.j, j=rel_merged.i).key_by('i', 'j').union(rel.key_by('i','j'))
+rel_merged = rel_merged.annotate(i=rel_merged.j, j=rel_merged.i).key_by('i','j').union(rel.key_by('i','j'))
 
 try:
-    related_in_ped = rel_merged.annotate(ped_relationship=ped_rels_ht_merged[rel_merged.key].ped_relationship)
+    rel_merged = rel_merged.annotate(ped_relationship=ped_rels_ht_merged[rel_merged.key].ped_relationship)
 except:  # no related in ped
-    related_in_ped = rel_merged.annotate(ped_relationship=hl.missing('str'))
-related_in_ped = related_in_ped.filter(hl.is_missing(related_in_ped.ped_relationship), keep=False)
-
-unrelated_in_ped = rel_merged.anti_join(related_in_ped).annotate(ped_relationship='unrelated')
+    rel_merged = rel_merged.annotate(ped_relationship=hl.missing('str'))
 
 p = downsampled_unrelated_proportion
-only_related = unrelated_in_ped.filter(unrelated_in_ped.relationship!='unrelated')
-downsampled_unrelated = unrelated_in_ped.anti_join(only_related).sample(p)
+related_in_ped_or_inferred_related = rel_merged.filter((hl.is_defined(rel_merged.ped_relationship)) |
+                                                       (rel_merged.relationship!='unrelated'))
+downsampled_unrelated = rel_merged.anti_join(related_in_ped_or_inferred_related).sample(p)
 
 if p!=0:
-    rel_total = related_in_ped.union(only_related).union(downsampled_unrelated)
+    rel_total = related_in_ped_or_inferred_related.union(downsampled_unrelated)
 else:
-    rel_total = related_in_ped.union(only_related)
+    rel_total = related_in_ped_or_inferred_related
     
 # Export as gzipped TSV
 rel_total.repartition(1000).export(f"{cohort_prefix}_kinship.tsv.gz")
