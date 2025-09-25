@@ -242,7 +242,7 @@ unrelated_in_ped = rel_merged.anti_join(related_in_ped).annotate(ped_relationshi
 
 p = downsampled_unrelated_proportion
 only_related = unrelated_in_ped.filter(unrelated_in_ped.relationship!='unrelated')
-downsampled_unrelated = unrelated_in_ped.filter(unrelated_in_ped.relationship=='unrelated').sample(p)
+downsampled_unrelated = unrelated_in_ped.anti_join(only_related).sample(p)
 
 rel_total = related_in_ped.union(only_related).union(downsampled_unrelated)
 
