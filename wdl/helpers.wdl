@@ -400,7 +400,7 @@ task mergeResultsPython {
         for i, tsv in enumerate(tsvs):
             if (i+1)%100==0:
                 print(f"Loading tsv {i+1}/{tot}...")
-            df = pd.read_csv(tsv, sep='\t')
+            df = pd.read_csv(tsv, sep='\t', compression='gzip' if tsv.split('.')[-1] in ['bgz', 'gz'] else None)
             merged_df = pd.concat([merged_df, df])
         merged_df.to_csv(merged_filename, sep='\t', index=False)
         EOF
