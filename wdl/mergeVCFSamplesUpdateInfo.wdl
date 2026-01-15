@@ -91,7 +91,7 @@ task mergeVCFSamplesUpdateInfo {
         curl -L ~{merge_vcf_samples_update_info_script} -o merge_vcf_files.py
 
         # Run the Python script with the provided arguments
-        python merge_vcf_files.py \
+        python3 merge_vcf_files.py \
             --vcf-files ~{sep=" " vcf_files} \
             --batch_size ~{batch_size} \
             --output_vcf_file ~{output_vcf_file} \
