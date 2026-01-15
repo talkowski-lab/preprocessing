@@ -18,8 +18,8 @@ workflow MergeVCFSamplesUpdateInfo {
 
         Int batch_size = 10
         String? output_vcf_filename_override  # End with ".bgz" for bgzipped output
-        Array[String] min_info_fields = ["FS", "ExcessHet", "SOR"]
-        Array[String] max_info_fields = ["FractionInformativeReads", "LOD", "MQ", "MQRankSum", "BaseQRankSum", "ReadPosRankSum", "QD", "VQSLOD", "QUALapprox"]
+        Array[String] min_info_fields = ["FractionInformativeReads", "LOD", "MQ", "MQRankSum", "BaseQRankSum", "ReadPosRankSum", "QD", "VQSLOD", "QUALapprox", "ExcessHet"]
+        Array[String] max_info_fields = ["FS", "SOR"]
         Array[String] sum_info_fields = ["DP", "MQ_DP", "VarDP"]
     }
 
