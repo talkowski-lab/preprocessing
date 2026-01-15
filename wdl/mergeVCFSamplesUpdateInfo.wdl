@@ -13,20 +13,24 @@ workflow MergeVCFSamplesUpdateInfo {
     input {
         Array[File] vcf_files
         String merge_vcf_samples_update_info_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_merge_vcf_samples_update_info.py"
-        String output_vcf
         String hail_docker
+        String prefix
+
         Int batch_size = 10
+        String? output_vcf_filename_override  # End with ".bgz" for bgzipped output
         Array[String] min_info_fields = ["FS", "ExcessHet", "SOR"]
         Array[String] max_info_fields = ["FractionInformativeReads", "LOD", "MQ", "MQRankSum", "BaseQRankSum", "ReadPosRankSum", "QD", "VQSLOD", "QUALapprox"]
         Array[String] sum_info_fields = ["DP", "MQ_DP", "VarDP"]
     }
+
+    String output_vcf_file = select_first([output_vcf_filename_override, prefix + '.merged.vcf.bgz'])
 
     call mergeVCFSamplesUpdateInfo {
         input:
             merge_vcf_samples_update_info_script = merge_vcf_samples_update_info_script,
             vcf_files = vcf_files,
             batch_size = batch_size,
-            output_vcf = output_vcf,
+            output_vcf_file = output_vcf_file,
             min_info_fields = min_info_fields,
             max_info_fields = max_info_fields,
             sum_info_fields = sum_info_fields,
@@ -34,7 +38,8 @@ workflow MergeVCFSamplesUpdateInfo {
     }
 
     output {
-        File final_merged_vcf = mergeVCFSamplesUpdateInfo.merged_vcf
+        File merged_vcf_file = mergeVCFSamplesUpdateInfo.merged_vcf_file
+        File merged_vcf_idx = mergeVCFSamplesUpdateInfo.merged_vcf_idx
     }
 }
 
@@ -43,7 +48,7 @@ task mergeVCFSamplesUpdateInfo {
         String merge_vcf_samples_update_info_script
         Array[File] vcf_files
         Int batch_size
-        String output_vcf
+        String output_vcf_file
         String hail_docker
         Array[String] min_info_fields
         Array[String] max_info_fields
@@ -89,14 +94,16 @@ task mergeVCFSamplesUpdateInfo {
         python merge_vcf_files.py \
             --vcf-files ~{sep=" " vcf_files} \
             --batch_size ~{batch_size} \
-            --output_vcf ~{output_vcf} \
+            --output_vcf_file ~{output_vcf_file} \
             --mem ~{memory} \
             --min-info-fields ~{sep=" " min_info_fields} \
             --max-info-fields ~{sep=" " max_info_fields} \
             --sum-info-fields ~{sep=" " sum_info_fields} 
+        tabix ~{output_vcf_file}
     >>>
 
     output {
-        File merged_vcf = output_vcf
+        File merged_vcf_file = output_vcf_file
+        File merged_vcf_idx = output_vcf_file + '.tbi'
     }
 }
