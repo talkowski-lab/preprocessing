@@ -39,7 +39,6 @@ workflow MergeVCFSamplesUpdateInfo {
 
     output {
         File merged_vcf_file = mergeVCFSamplesUpdateInfo.merged_vcf_file
-        File merged_vcf_idx = mergeVCFSamplesUpdateInfo.merged_vcf_idx
     }
 }
 
@@ -99,11 +98,9 @@ task mergeVCFSamplesUpdateInfo {
             --min-info-fields ~{sep=" " min_info_fields} \
             --max-info-fields ~{sep=" " max_info_fields} \
             --sum-info-fields ~{sep=" " sum_info_fields} 
-        tabix ~{output_vcf_file}
     >>>
 
     output {
         File merged_vcf_file = output_vcf_file
-        File merged_vcf_idx = output_vcf_file + '.tbi'
     }
 }
