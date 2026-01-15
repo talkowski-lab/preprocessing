@@ -8,8 +8,8 @@ import numpy as np
 parser = argparse.ArgumentParser(description="Merge vcf_files sample-wise with Hail and update INFO fields")
 
 parser.add_argument("--vcf-files", nargs="+", help="List of VCF files to merge")
-parser.add_argument("--batch_size", type=int, help="Batch size (number of vcf_files) for processing")
-parser.add_argument("--output_vcf", type=str, help="Path for final VCF output")
+parser.add_argument("--batch-size", type=int, help="Batch size (number of vcf_files) for processing")
+parser.add_argument("--output-vcf-file", type=str, help="Path for final VCF output")
 parser.add_argument("--mem", type=float, help="Memory in GB to allocate for Hail processing")
 parser.add_argument("--max-info-fields", nargs="+", help="List of INFO field to merge by taking the max")
 parser.add_argument("--min-info-fields", nargs="+", help="List of INFO field to merge by taking the min")
@@ -18,7 +18,7 @@ args = parser.parse_args()
 
 vcf_files = args.vcf_files
 batch_size = args.batch_size
-output_vcf = args.output_vcf
+output_vcf = args.output_vcf_file
 mem = args.mem
 max_info_fields = args.max_info_fields
 min_info_fields = args.min_info_fields

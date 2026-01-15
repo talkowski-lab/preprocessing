@@ -93,8 +93,8 @@ task mergeVCFSamplesUpdateInfo {
         # Run the Python script with the provided arguments
         python3 merge_vcf_files.py \
             --vcf-files ~{sep=" " vcf_files} \
-            --batch_size ~{batch_size} \
-            --output_vcf_file ~{output_vcf_file} \
+            --batch-size ~{batch_size} \
+            --output-vcf-file ~{output_vcf_file} \
             --mem ~{memory} \
             --min-info-fields ~{sep=" " min_info_fields} \
             --max-info-fields ~{sep=" " max_info_fields} \
