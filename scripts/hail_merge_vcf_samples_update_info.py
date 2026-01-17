@@ -78,7 +78,7 @@ def import_batch_and_union_cols(
         print(f"  Unioning VCF {idx}/{len(vcf_paths)}")
         other = import_vcf_with_partitions(path, partitions, reference_genome)
         mt = mt.union_cols(
-            right=other,
+            other,
             row_join_type="outer",
             drop_right_row_fields=False,
         )
@@ -142,7 +142,7 @@ def recursive_union_cols(
             mt2 = hl.read_matrix_table(path=current[i + 1])
 
             merged = mt1.union_cols(
-                right=mt2,
+                mt2,
                 row_join_type="outer",
                 drop_right_row_fields=False,
             )
@@ -286,7 +286,7 @@ for field in other_info_keys:
 # Checkpoint before cohort-level QC
 # -------------------------------
 final_out_updated = f"{tmp_prefix}.merged.updated.info.mt"
-final_mt = final_mt.checkpoint(path=final_out_updated)
+final_mt = final_mt.checkpoint(final_out_updated)
 
 # -------------------------------
 # Recalculate cohort-level QC after filling missing GTs
@@ -306,10 +306,10 @@ final_mt = final_mt.annotate_rows(
 )
 
 # Assumes uniform header across VCFs --> just grab first VCF's header
-header = hl.get_vcf_metadata(path=vcf_files[0])
+header = hl.get_vcf_metadata(vcf_files[0])
 
 hl.export_vcf(
-    mt=final_mt,
+    final_mt,
     output=output_vcf,
     metadata=header
 )
