@@ -107,7 +107,7 @@ def union_vcf_files_in_batches(
         out = f"{tmp_prefix}.batch_{batch_idx}.mt"
         print(f"Writing batch MT to {out}")
         merged.write(
-            path=out,
+            out,
             overwrite=True
         )
 
@@ -150,7 +150,7 @@ def recursive_union_cols(
             out = f"{final_out}.round_{round_num}_{i // 2}.mt"
             print(f"  Writing intermediate MT to {out}")
             merged.write(
-                path=out,
+                out,
                 overwrite=True
             )
 
@@ -162,7 +162,7 @@ def recursive_union_cols(
     # Write final unioned MT
     print(f"\nWriting final unioned MT to {final_out}")
     hl.read_matrix_table(path=current[0]).write(
-        path=final_out,
+        final_out,
         overwrite=True
     )
 
