@@ -181,6 +181,12 @@ union_many_vcf_files(
 
 final_mt = hl.read_matrix_table(final_out)
 
+# Fill missing GTs with 0/0
+final_mt = final_mt.annotate_entries(
+    GT=hl.or_else(final_mt.GT, hl.call(0, 0))
+)
+
+## Need to update INFO field values after merging vcf_files across samples ##
 # Don't care as much about the other fields --> can just leave them as the first VCF's values (default behavior)
 # Need these fields updated for hard filtering and PURF model
 merge_strategy = {"max": max_info_fields, "min": min_info_fields, "sum": sum_info_fields}
@@ -203,7 +209,10 @@ for strat, fields in merge_strategy.items():
             })
         )
 
-## Need to update INFO field values after merging vcf_files across samples ##
+# Checkpoint before final export
+final_out_updated = f"{tmp_prefix}.merged.updated.info.mt"
+final_mt = final_mt.checkpoint(final_out_updated)
+
 # Recalculate AC, AF, AN after merge
 final_mt = hl.variant_qc(final_mt)
 final_mt = final_mt.annotate_rows(info=final_mt.info.annotate(
