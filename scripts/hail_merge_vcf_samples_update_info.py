@@ -263,6 +263,7 @@ for strat, fields in merge_strategy.items():
         )
 
 # Step 2: For all other INFO fields, take first non-missing value
+
 all_info_keys = set()
 for f in info_fields_list:
     all_info_keys.update(final_mt[f].dtype.keys())
@@ -271,13 +272,17 @@ handled_keys = set(sum(merge_strategy.values(), []))
 other_info_keys = all_info_keys - handled_keys
 
 for field in other_info_keys:
+    # Only include INFO structs that actually have this field
+    exprs = [
+        final_mt[f][field]
+        for f in info_fields_list
+        if field in final_mt[f].dtype
+    ]
+
     final_mt = final_mt.annotate_rows(
         info_new=final_mt.info_new.annotate(
             **{
-                field: hl.find(
-                    lambda x: hl.is_defined(x),
-                    [final_mt[f][field] for f in info_fields_list]
-                )
+                field: hl.find(lambda x: hl.is_defined(x), exprs)
             }
         )
     )
