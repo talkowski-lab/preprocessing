@@ -232,10 +232,10 @@ task mergeVCFSamples {
     if [ "~{defined(format_fields_to_keep)}" = "true" ]; then
         if [ "~{length(select_first([format_fields_to_keep]))}" -gt 0 ]; then
             keep_fields="~{sep=',' format_fields_to_keep}"
-            FORMAT_EXCLUDE="-x ^FORMAT/${keep_fields//,/\,FORMAT/}"
+            FORMAT_EXCLUDE="-x ^FORMAT/$(echo "$keep_fields" | sed 's/,/,FORMAT\//g')"
         fi
     fi
-
+    
     processed_vcfs=""
     for vcf in $(cat vcfs_sorted.list); do
         base=$(basename $vcf .vcf.gz)
