@@ -53,12 +53,13 @@ workflow AncestryInferenceCohortSet {
                     hail_docker=hail_docker
             }
         }
-        call mergeVCFSamples.mergeVCFs as mergeVCFSamples {
+        call mergeVCFSamples.mergeVCFSamples as mergeVCFSamples {
             input:
             vcf_files=renameVCFSamples.renamed_vcf_file,
             output_vcf_name=cohort_prefix+'.ancestry_sites.vcf.gz',
             sv_base_mini_docker=sv_base_mini_docker,
-            recalculate_af=false,
+            format_fields_to_keep=["GT","GQ","DP","AD"],
+            recalculate_af=true,
             runtime_attr_override=runtime_attr_merge_vcfs
         }
     }
