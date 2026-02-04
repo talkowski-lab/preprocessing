@@ -396,12 +396,15 @@ task mergeResultsPython {
 
         dfs = []
         tot = len(tsvs)
+        chunked_dfs = []
         merged_df = pd.DataFrame()
         for i, tsv in enumerate(tsvs):
             if (i+1)%100==0:
                 print(f"Loading tsv {i+1}/{tot}...")
-            df = pd.read_csv(tsv, sep='\t', compression='gzip' if tsv.split('.')[-1] in ['bgz', 'gz'] else None)
-            merged_df = pd.concat([merged_df, df])
+            df = pd.concat(pd.read_csv(tsv, sep='\t', chunksize=100_000,
+                compression='gzip' if tsv.split('.')[-1] in ['bgz', 'gz'] else None))
+            chunked_dfs.append(df)
+        merged_df = pd.concat(chunked_dfs)
         merged_df.to_csv(merged_filename, sep='\t', index=False)
         EOF
 
