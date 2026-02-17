@@ -978,7 +978,7 @@ task mergeMTs {
             mt = hl.read_matrix_table(mt_uri)
         else:
             mt2 = hl.read_matrix_table(mt_uri)
-            mt = mt.union_rows(mt2, row_join_type=~{if join_outer then "outer" else "inner"})
+            mt = mt.union_cols(mt2, row_join_type=~{if join_outer then "outer" else "inner"})
     mt.write(f"{merged_filename}.mt", overwrite=True)
     EOF
 
