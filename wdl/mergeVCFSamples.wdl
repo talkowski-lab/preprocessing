@@ -179,6 +179,115 @@ task mergeVCFs {
     }
 }
 
+task mergeVCFSamples {
+    input {
+        Array[File] vcf_files
+        String output_vcf_name
+        String sv_base_mini_docker
+
+        # NEW: FORMAT fields to keep; default = keep all
+        Array[String]? format_fields_to_keep
+
+        Boolean recalculate_af=false
+        Boolean fill_missing=false
+        RuntimeAttr? runtime_attr_override
+    }
+
+    Float input_size = size(vcf_files, 'GB')
+    Float base_disk_gb = 10.0
+    Float input_disk_scale = 5.0
+
+    RuntimeAttr runtime_default = object {
+        mem_gb: 4,
+        disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
+        cpu_cores: 1,
+        preemptible_tries: 3,
+        max_retries: 1,
+        boot_disk_gb: 10
+    }
+
+    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+    Float memory = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+    Int cpu_cores = select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+
+    runtime {
+        memory: "~{memory} GB"
+        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: cpu_cores
+        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        docker: sv_base_mini_docker
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+
+    command <<<
+    set -euo pipefail
+
+    VCFS="~{write_lines(vcf_files)}"
+    cat $VCFS | awk -F '/' '{print $NF"\t"$0}' | sort -k1,1V | awk '{print $2}' > vcfs_sorted.list
+
+    # Build FORMAT exclusion expression if requested
+    FORMAT_EXCLUDE=""
+    if [ "~{defined(format_fields_to_keep)}" = "true" ]; then
+        if [ "~{length(select_first([format_fields_to_keep]))}" -gt 0 ]; then
+            keep_fields="~{sep=',' format_fields_to_keep}"
+            FORMAT_EXCLUDE="-x ^FORMAT/$(echo "$keep_fields" | sed 's/,/,FORMAT\//g')"
+        fi
+    fi
+
+    processed_vcfs=""
+    for vcf in $(cat vcfs_sorted.list); do
+        base=$(basename $vcf .vcf.gz)
+        processed_vcf=${base}.proc.vcf.gz
+
+        cmd="bcftools annotate"
+
+        # Drop AF if recalculating
+        if [ "~{recalculate_af}" = "true" ]; then
+            cmd="$cmd -x INFO/AF,FORMAT/AF"
+        fi
+
+        # Apply FORMAT field filtering if specified
+        if [ -n "$FORMAT_EXCLUDE" ]; then
+            cmd="$cmd $FORMAT_EXCLUDE"
+        fi
+
+        # If no modifications, symlink original
+        if [ "$cmd" = "bcftools annotate" ]; then
+            ln -s $vcf $processed_vcf
+            tabix -f $processed_vcf
+        else
+            $cmd -Oz -o $processed_vcf $vcf
+            tabix $processed_vcf
+        fi
+
+        processed_vcfs="$processed_vcfs $processed_vcf"
+    done
+
+    printf "%s\n" $processed_vcfs > vcfs_use.list
+
+    bcftools merge -m none -Oz -o ~{output_vcf_name} --file-list vcfs_use.list
+
+    if [ "~{fill_missing}" = "true" ]; then
+        mv ~{output_vcf_name} tmp_~{output_vcf_name}
+        bcftools +setGT -Oz -o ~{output_vcf_name} tmp_~{output_vcf_name} -- -t . -n 0
+    fi
+
+    if [ "~{recalculate_af}" = "true" ]; then
+        mv ~{output_vcf_name} tmp_~{output_vcf_name}
+        bcftools +fill-tags tmp_~{output_vcf_name} -Oz -o ~{output_vcf_name} -- -t AN,AC,AF
+    fi
+
+    tabix ~{output_vcf_name}
+    >>>
+
+    output {
+        File merged_vcf_file = output_vcf_name
+        File merged_vcf_idx = output_vcf_name + ".tbi"
+    }
+}
+
 task mergeVCFsReheader {
     input {
         Array[File] vcf_files
@@ -239,5 +348,85 @@ task mergeVCFsReheader {
     output {
         File merged_vcf_file = output_vcf_name
         File merged_vcf_idx = output_vcf_name + '.tbi'
+    }
+}
+
+task renameVCFSamplesWithCohort {
+    input {
+        File vcf_uri
+        String cohort_prefix
+        String hail_docker
+        RuntimeAttr? runtime_attr_override
+    }
+    Float input_size = size(vcf_uri, 'GB')
+    Float base_disk_gb = 10.0
+    Float input_disk_scale = 5.0
+    RuntimeAttr runtime_default = object {
+        mem_gb: 4,
+        disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
+        cpu_cores: 1,
+        preemptible_tries: 3,
+        max_retries: 1,
+        boot_disk_gb: 10
+    }
+
+    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    Float memory = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+    Int cpu_cores = select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+
+    runtime {
+        memory: "~{memory} GB"
+        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: cpu_cores
+        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        docker: hail_docker
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+
+    command <<<
+    cat <<EOF > merge_vcfs.py
+    import pandas as pd
+    import numpy as np
+    import hail as hl
+    import sys
+    import os
+
+    vcf_uri = sys.argv[1]
+    cohort_prefix = sys.argv[2]
+    cores = sys.argv[3]  # string
+    mem = int(np.floor(float(sys.argv[4])))
+
+    hl.init(min_block_size=128, spark_conf={"spark.executor.cores": cores, 
+                        "spark.executor.memory": f"{int(np.floor(mem*0.4))}g",
+                        "spark.driver.cores": cores,
+                        "spark.driver.memory": f"{int(np.floor(mem*0.4))}g"
+                        }, tmp_dir="tmp", local_tmpdir="tmp")
+
+    mt = hl.import_vcf(vcf_uri, reference_genome='GRCh38', force_bgz=True, call_fields=[], array_elements_required=False)
+    mt = mt.key_cols_by()
+    mt = mt.annotate_cols(s=hl.str(f"{cohort_prefix}:")+mt.s).key_cols_by('s')
+    try:
+        # for haploid (e.g. chrY)
+        mt = mt.annotate_entries(
+            GT = hl.if_else(
+                    mt.GT.ploidy == 1, 
+                    hl.call(mt.GT[0], mt.GT[0]),
+                    mt.GT)
+        )
+    except:
+        pass
+
+    header = hl.get_vcf_metadata(vcf_uri) 
+    hl.export_vcf(mt, f"{os.path.basename(vcf_uri).split('.vcf')[0]}_new_sample_IDs.vcf.bgz", metadata=header)
+    EOF
+
+    python3 merge_vcfs.py ~{vcf_uri} ~{cohort_prefix} ~{cpu_cores} ~{memory}
+    >>>
+
+    String file_ext = if sub(basename(vcf_uri), '.vcf.gz', '')!=basename(vcf_uri) then '.vcf.gz' else '.vcf.bgz'
+
+    output {
+        File renamed_vcf_file = "~{basename(vcf_uri, file_ext)}_new_sample_IDs.vcf.bgz"
     }
 }

@@ -62,11 +62,14 @@ mt = hl.import_vcf(vcf_uri, reference_genome=genome_build, force_bgz=True, call_
 if split_multi:
     mt = split_multi_ssc(mt)
 
-mt = mt.annotate_entries(AB=mt.AD[1]/hl.sum(mt.AD))
-mt = mt.annotate_entries(GT=hl.or_missing(mt.DP!=0, mt.GT))
-# only consider hets with 0.3 <= AB <= 0.7
-mt = mt.annotate_entries(GT=hl.if_else(mt.GT.is_het(),
-                         hl.or_missing((mt.AB>=0.3) & (mt.AB<=0.7), mt.GT), mt.GT))
+if 'DP' in list(mt.row):
+    mt = mt.annotate_entries(GT=hl.or_missing(mt.DP!=0, mt.GT))
+
+if 'AD' in list(mt.row):
+    mt = mt.annotate_entries(AB=mt.AD[1]/hl.sum(mt.AD))
+    # only consider hets with 0.3 <= AB <= 0.7
+    mt = mt.annotate_entries(GT=hl.if_else(mt.GT.is_het(),
+                            hl.or_missing((mt.AB>=0.3) & (mt.AB<=0.7), mt.GT), mt.GT))
 
 all_qc = hl.sample_qc(mt)
 all_qc_df = all_qc.cols().flatten().to_pandas()
@@ -107,9 +110,9 @@ def predict_sex(row):
             sex = 1
         elif (row['chrX.n_het'] / row['chrX.n_hom_var'] > 0.4) & (row['chrX.n_called'] > 10):
             sex = 2
-    if (row['chrY.n_called']>0) & (row.sex==1) & (row['Y_ploidy'] < 0.4):
+    if (row['chrY.n_called']>0) & (sex==1) & (row['Y_ploidy'] < 0.4):
         sex = -1  # apparent loss of Y with low het-ratio on X chromosome
-    if (row['chrY.n_called']>0) & (row.sex==2) & (row['Y_ploidy'] > 0.4):
+    if (row['chrY.n_called']>0) & (sex==2) & (row['Y_ploidy'] > 0.4):
         sex = -2  # apparent Y with high het-ratio on X chromosome
     return sex
 
@@ -123,7 +126,8 @@ vcf_samps = mt.s.collect()
 ped = ped[ped.index.isin(vcf_samps)].copy()
 
 ped_qc = pd.concat([ped, sample_qc_df], axis=1).reset_index()
-ped_qc = ped_qc.fillna(np.nan)
+# ped_qc = ped_qc.fillna(np.nan)  # broke for some reason
+ped_qc = ped_qc.replace({pd.NA: None}).replace({None: np.nan})
 ped_qc['ped_sex'] = ped_qc.sex
 ped_qc['sex'] = ped_qc.apply(predict_sex, axis=1).astype('category')
 ped_qc = ped_qc[base_cols + ['ped_sex'] + np.setdiff1d(sample_qc_df.columns, base_cols).tolist()]

@@ -396,12 +396,15 @@ task mergeResultsPython {
 
         dfs = []
         tot = len(tsvs)
+        chunked_dfs = []
         merged_df = pd.DataFrame()
         for i, tsv in enumerate(tsvs):
             if (i+1)%100==0:
                 print(f"Loading tsv {i+1}/{tot}...")
-            df = pd.read_csv(tsv, sep='\t')
-            merged_df = pd.concat([merged_df, df])
+            df = pd.concat(pd.read_csv(tsv, sep='\t', chunksize=100_000,
+                compression='gzip' if tsv.split('.')[-1] in ['bgz', 'gz'] else None))
+            chunked_dfs.append(df)
+        merged_df = pd.concat(chunked_dfs)
         merged_df.to_csv(merged_filename, sep='\t', index=False)
         EOF
 
@@ -410,6 +413,62 @@ task mergeResultsPython {
 
     output {
         File merged_tsv = merged_filename 
+    }   
+}
+
+task ConvertTSVtoExcel {
+     input {
+        File tsv
+        String hail_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    Float input_size = size(tsv, 'GB')
+    Float base_disk_gb = 10.0
+    Float input_disk_scale = 5.0
+    RuntimeAttr runtime_default = object {
+        mem_gb: 4,
+        disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
+        cpu_cores: 1,
+        preemptible_tries: 3,
+        max_retries: 1,
+        boot_disk_gb: 10
+    }
+
+    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    Float memory = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+    Int cpu_cores = select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+
+    runtime {
+        memory: "~{memory} GB"
+        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: cpu_cores
+        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        docker: hail_docker
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+
+    command <<<
+        cat <<EOF > convert_tsv.py
+        import pandas as pd
+        import numpy as np
+        import sys
+        import os
+        tsv = sys.argv[1]
+
+        merged_df = pd.read_csv(tsv, sep='\t')
+        output_filename = f"{os.path.basename(tsv).split('.tsv')[0]}.xlsx"
+        merged_df.to_excel(output_filename, index=False)
+        EOF
+
+        python3 convert_tsv.py ~{tsv}
+    >>>
+
+    String file_ext = if sub(basename(tsv), '.tsv.gz', '')!=basename(tsv) then '.tsv.gz' else '.tsv'
+    String output_filename = "~{basename(tsv, file_ext)}.xlsx"
+    output {
+        File output_excel = output_filename
     }   
 }
 
@@ -726,6 +785,52 @@ task filterIntervalsToVCF {
     }
 }
 
+task subsetVCFSamples {
+        input {
+        File vcf_file
+        File samples_file  # .txt extension  
+        String docker
+        RuntimeAttr? runtime_attr_override
+    }
+    Float input_size = size(vcf_file, 'GB')
+    Float base_disk_gb = 10.0
+    Float input_disk_scale = 5.0
+
+    RuntimeAttr runtime_default = object {
+        mem_gb: 4,
+        disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
+        cpu_cores: 1,
+        preemptible_tries: 3,
+        max_retries: 1,
+        boot_disk_gb: 10
+    }
+
+    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+    Float memory = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+    Int cpu_cores = select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    
+    runtime {
+        memory: "~{memory} GB"
+        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: cpu_cores
+        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        docker: docker
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+
+    command <<<
+    bcftools view -S ~{samples_file} --force-samples --no-update -Oz -o ~{basename(samples_file, '.txt')+'.vcf.gz'} ~{vcf_file}
+    tabix ~{basename(samples_file, '.txt')+'.vcf.gz'}
+    >>>
+
+    output {
+        File vcf_subset = basename(samples_file, '.txt') + '.vcf.gz'
+        File vcf_subset_idx = basename(samples_file, '.txt') + '.vcf.gz.tbi'
+    }
+}
+
 task subsetVCFSamplesHail {
     input {
         File vcf_file
@@ -815,14 +920,13 @@ task subsetVCFSamplesHail {
 task mergeMTs {
     input {
         Array[String] mt_uris
-        String cohort_prefix
-        String bucket_id
+        String merged_filename
+        Boolean join_outer = false
         String hail_docker
         RuntimeAttr? runtime_attr_override
     }
 
     Float base_disk_gb = 10.0
-    Float input_disk_scale = 5.0
 
     RuntimeAttr runtime_default = object {
         mem_gb: 4,
@@ -850,8 +954,6 @@ task mergeMTs {
 
     command <<<
     cat <<EOF > merge_mts.py
-    import datetime
-    import pandas as pd
     import hail as hl
     import numpy as np
     import sys
@@ -861,7 +963,6 @@ task mergeMTs {
     merged_filename = sys.argv[2]
     cores = sys.argv[3]
     mem = int(np.floor(float(sys.argv[4])))
-    bucket_id = sys.argv[5]
 
     hl.init(min_block_size=128, spark_conf={"spark.executor.cores": cores, 
                         "spark.executor.memory": f"{int(np.floor(mem*0.4))}g",
@@ -877,13 +978,13 @@ task mergeMTs {
             mt = hl.read_matrix_table(mt_uri)
         else:
             mt2 = hl.read_matrix_table(mt_uri)
-            mt = mt.union_rows(mt2)
-    filename = f"{bucket_id}/hail/merged_mt/{str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M'))}/{merged_filename}.mt"
+            mt = mt.union_cols(mt2, row_join_type=~{if join_outer then "outer" else "inner"})
+    filename = "~{merged_filename}.mt"
     mt.write(filename, overwrite=True)
     pd.Series([filename]).to_csv('mt_uri.txt', index=False, header=None)
     EOF
 
-    python3 merge_mts.py ~{sep=',' mt_uris} ~{cohort_prefix}_merged ~{cpu_cores} ~{memory} ~{bucket_id}
+    python3 merge_mts.py ~{sep=',' mt_uris} ~{merged_filename} ~{cpu_cores} ~{memory}
     >>>
 
     output {

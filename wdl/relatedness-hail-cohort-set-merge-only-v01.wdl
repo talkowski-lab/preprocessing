@@ -31,7 +31,6 @@ workflow RelatednessCohortSet {
         String x_metric='ibd0'
         String y_metric='kin'
         String kinship_field='kin'  # for sorting in removeDuplicates
-        Float downsampled_unrelated_proportion=0.05
         Int chunk_size=100000
         Int samples_per_chunk=0
         Boolean sort_after_merge=false
@@ -61,7 +60,7 @@ workflow RelatednessCohortSet {
             vcf_files=renameVCFSamplesWithCohort.renamed_vcf_file,
             output_vcf_name=merged_filename+'.vcf.gz',
             sv_base_mini_docker=sv_base_mini_docker,
-            keep_gt_ad_dp_only=true,
+            format_fields_to_keep=["GT","AD","DP"],
             recalculate_af=true,
             runtime_attr_override=runtime_attr_merge_vcfs
         }
@@ -78,80 +77,9 @@ workflow RelatednessCohortSet {
             input_size=size(ped_uri, 'GB')
     }
 
-    if (samples_per_chunk==0) {
-        call relatednessHail.Relatedness as Relatedness {
-            input:
-            vep_vcf_files=[],
-            somalier_vcf_file_=merged_vcf_file,
-            ped_uri=mergePeds.merged_ped_file,
-            bed_file=bed_file,
-            cohort_prefix=merged_filename,
-            relatedness_qc_script=relatedness_qc_script,
-            plot_relatedness_script=plot_relatedness_script,
-            sex_qc_script=sex_qc_script,
-            sv_base_mini_docker=sv_base_mini_docker,
-            hail_docker=hail_docker,
-            bucket_id=bucket_id,
-            genome_build=genome_build,
-            x_metric=x_metric,
-            y_metric=y_metric,
-            chunk_size=chunk_size,
-            sort_after_merge=sort_after_merge,
-            split_multi=split_multi,
-            kinship_ht_uri='NA',
-            presaved_kinship_ht_uri='NA',
-            downsampled_unrelated_proportion=downsampled_unrelated_proportion,
-            runtime_attr_subset_vcfs=runtime_attr_subset_vcfs,
-            runtime_attr_merge_vcfs=runtime_attr_merge_vcfs,
-            runtime_attr_impute_sex=runtime_attr_impute_sex,
-            runtime_attr_check_relatedness=runtime_attr_check_relatedness,
-            runtime_attr_plot_relatedness=runtime_attr_plot_relatedness
-        }
-    }
-
-    if (samples_per_chunk>0) {
-        call relatednessHailSubsetSamples.Relatedness as Relatedness_subsetSamples {
-            input:
-            vep_vcf_files=[],
-            somalier_vcf_file_=merged_vcf_file,
-            ped_uri=mergePeds.merged_ped_file,
-            bed_file=bed_file,
-            samples_per_chunk=samples_per_chunk,
-            cohort_prefix=merged_filename,
-            relatedness_qc_script=relatedness_qc_script,
-            plot_relatedness_script=plot_relatedness_script,
-            sv_base_mini_docker=sv_base_mini_docker,
-            sex_qc_script=sex_qc_script,
-            hail_docker=hail_docker,
-            bucket_id=bucket_id,
-            genome_build=genome_build,
-            x_metric=x_metric,
-            y_metric=y_metric,
-            kinship_field=kinship_field,
-            kinship_ht_uri='NA',
-            presaved_kinship_ht_uri='NA',
-            downsampled_unrelated_proportion=downsampled_unrelated_proportion,
-            chunk_size=chunk_size,
-            sort_after_merge=sort_after_merge,
-            split_multi=split_multi,
-            runtime_attr_subset_vcfs=runtime_attr_subset_vcfs,
-            runtime_attr_merge_vcfs=runtime_attr_merge_vcfs,
-            runtime_attr_impute_sex=runtime_attr_impute_sex,
-            runtime_attr_hail_pca=runtime_attr_hail_pca,
-            runtime_attr_check_relatedness=runtime_attr_check_relatedness,
-            runtime_attr_plot_relatedness=runtime_attr_plot_relatedness,
-            runtime_attr_merge_results=runtime_attr_merge_results
-        }
-    }
-
     output {
         String cohort_prefix = merged_filename
         File somalier_vcf_file = merged_vcf_file
-        File sex_qc_plots = select_first([Relatedness.sex_qc_plots, Relatedness_subsetSamples.sex_qc_plots])
-        File ped_sex_qc = select_first([Relatedness.ped_sex_qc, Relatedness_subsetSamples.ped_sex_qc])
-        File relatedness_qc = select_first([Relatedness.relatedness_qc, Relatedness_subsetSamples.relatedness_qc])
-        File kinship_tsv = select_first([Relatedness.kinship_tsv, Relatedness_subsetSamples.kinship_tsv])
-        File relatedness_plot = select_first([Relatedness.relatedness_plot, Relatedness_subsetSamples.relatedness_plot])
     }
 }
 

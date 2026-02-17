@@ -30,12 +30,20 @@ bucket_id = sys.argv[6]
 score_table = sys.argv[7]
 genome_build = sys.argv[8]
 split_multi = ast.literal_eval(sys.argv[9].capitalize())
+kinship_ht_uri = sys.argv[10]  # optional
+presaved_kinship_ht_uri = sys.argv[11]  # optional
+downsampled_unrelated_proportion = float(sys.argv[12])
+
+print(f"Using CPU cores: {cores}")
+print(f"Using memory: {mem} GB")
 
 hl.init(min_block_size=128, 
         local=f"local[*]", 
         spark_conf={
                     "spark.driver.memory": f"{int(np.floor(mem*0.8))}g",
-                    "spark.speculation": 'true'
+                    "spark.speculation": 'true',
+                    "spark.rpc.askTimeout": '600s',
+                    "spark.network.timeout": '600s'
                     }, 
         tmp_dir="tmp", local_tmpdir="tmp",
                     )
@@ -68,13 +76,21 @@ mt = hl.import_vcf(vcf_uri, reference_genome=genome_build, force_bgz=True, call_
 if split_multi:
     mt = split_multi_ssc(mt)
 
-if score_table=='false':
-    rel = hl.pc_relate(mt.GT, 0.01, k=10)
-else:
-    score_table_som = hl.read_table(score_table)
-    mt = mt.annotate_cols(scores=score_table_som[mt.s].scores)
-    rel = hl.pc_relate(mt.GT, 0.01, scores_expr=mt.scores)
+if presaved_kinship_ht_uri!='NA':
+    rel = hl.read_table(presaved_kinship_ht_uri)
 
+elif presaved_kinship_ht_uri=='NA':
+    if score_table=='false':
+        rel = hl.pc_relate(mt.GT, 0.01, k=10)
+    else:
+        score_table_som = hl.read_table(score_table)
+        mt = mt.annotate_cols(scores=score_table_som[mt.s].scores)
+        rel = hl.pc_relate(mt.GT, 0.01, scores_expr=mt.scores)
+
+# Optionally write HT
+if kinship_ht_uri!='NA' and presaved_kinship_ht_uri!=kinship_ht_uri:
+    rel = rel.checkpoint(kinship_ht_uri, overwrite=True)
+    
 rel = rel.annotate(relationship = relatedness.get_relationship_expr(rel.kin, rel.ibd0, rel.ibd1, rel.ibd2, 
                                                    first_degree_kin_thresholds=(0.19, 0.4), second_degree_min_kin=0.1, 
                                                    ibd0_0_max=0.2, ibd0_25_thresholds=(0.2, 0.425), ibd1_0_thresholds=(-0.15, 0.1), 
@@ -104,27 +120,28 @@ ped[['family_id', 'sample_id', 'paternal_id', 'maternal_id']] = ped[['family_id'
 vcf_samps = mt.s.collect()
 ped = ped[ped.sample_id.isin(vcf_samps)].copy()
 
+# Get the number of individuals in each family
 fam_sizes = ped.family_id.value_counts().to_dict()
-fathers = ped[~ped.paternal_id.isin(['0','-9'])].set_index('sample_id').paternal_id.to_dict()
-mothers = ped[~ped.maternal_id.isin(['0','-9'])].set_index('sample_id').maternal_id.to_dict()
+
+# Create dictionaries mapping sample_id to paternal/maternal_id (excluding missing values)
+fathers = ped[~ped.paternal_id.isin(['0', '-9'])].set_index('sample_id').paternal_id.to_dict()
+mothers = ped[~ped.maternal_id.isin(['0', '-9'])].set_index('sample_id').maternal_id.to_dict()
 
 def get_sample_role(row):
-    if fam_sizes[row.family_id]==1:
-        role = 'Singleton'
-    elif (row.maternal_id=='0') & (row.paternal_id=='0'):
-        if (row.sample_id in fathers.values()):
-            role = 'Father'
-        elif (row.sample_id in mothers.values()):
-            role = 'Mother'
+    if fam_sizes[row.family_id] == 1:
+        return 'Singleton'
+    elif row.maternal_id == '0' and row.paternal_id == '0':
+        if row.sample_id in fathers.values() or row.sex == 1:
+            return 'Father'
+        elif row.sample_id in mothers.values() or row.sex == 2:
+            return 'Mother'
         else:
-            role = 'Unknown'
-    elif (row.maternal_id in mothers.values()) & (row.paternal_id in fathers.values()):
-        role = 'Proband'
+            return 'Unknown'
     else:
-        role = 'Unknown'
-    return role
+        return 'Proband'
 
 if not ped.empty:
+    # Apply role assignment to each row
     ped['role'] = ped.apply(get_sample_role, axis=1)
 
     ped_ht = hl.Table.from_pandas(ped)
@@ -177,49 +194,77 @@ else:
 merged_rel_df.to_csv(f"{cohort_prefix}_relatedness_qc.ped", sep='\t', index=False)
 
 # annotate ped
-ped_rels = {'i':[], 'j': [], 'ped_relationship': [], 'family_id': []}
+ped_rels = {'i': [], 'j': [], 'ped_relationship': [], 'family_id': []}
 
+# Iterate over each family to determine pairwise relationships
 for fam in ped.family_id.unique():
-    fam_df = ped[ped.family_id==fam].reset_index(drop=True)
+    fam_df = ped[ped.family_id == fam].reset_index(drop=True)
+    
     for i, row_i in fam_df.iterrows():
         for j, row_j in fam_df.iterrows():
-            if (i==j) | ((row_i.role in ['Mother','Father']) & (row_j.role in ['Mother','Father'])):
-                continue
-
-            if (((row_i.paternal_id == row_j.sample_id)) | ((row_i.sample_id == row_j.paternal_id))) |\
-            (((row_i.maternal_id == row_j.sample_id)) | ((row_i.sample_id == row_j.maternal_id))):                
-                ped_rels['ped_relationship'].append('parent-child')
-            elif (row_i.paternal_id==row_j.paternal_id) & (row_i.maternal_id==row_j.maternal_id):
-                    ped_rels['ped_relationship'].append('siblings')
+            if i == j:
+                continue  # Skip self-pairs
+            
+            # Identify relationship type
+            if row_j.role in ['Mother', 'Father'] and row_i.role in ['Mother', 'Father']:
+                relation = 'unrelated'
+            elif (row_i.paternal_id == row_j.sample_id or row_i.sample_id == row_j.paternal_id or
+                  row_i.maternal_id == row_j.sample_id or row_i.sample_id == row_j.maternal_id):
+                relation = 'parent-child'
+            elif (row_i.paternal_id == row_j.paternal_id and
+                  row_i.maternal_id == row_j.maternal_id):
+                relation = 'siblings'
             else:
-                ped_rels['ped_relationship'].append('related_other')      
+                relation = 'related_other'
 
+            # Store the relationship
             ped_rels['i'].append(row_i.sample_id)
             ped_rels['j'].append(row_j.sample_id)
+            ped_rels['ped_relationship'].append(relation)
             ped_rels['family_id'].append(fam)
 
-
+# Convert relationships to DataFrame
 ped_rels_df = pd.DataFrame(ped_rels)
 ped_rels_ht = hl.Table.from_pandas(ped_rels_df)
 
 ped_rels_ht_merged = ped_rels_ht.annotate(i=ped_rels_ht.j, j=ped_rels_ht.i).key_by('i', 'j').union(ped_rels_ht.key_by('i','j'))
 
 rel_merged = rel.key_by()
-rel_merged = rel_merged.annotate(i=rel_merged.j, j=rel_merged.i).key_by('i', 'j').union(rel.key_by('i','j'))
+rel_merged = rel_merged.annotate(i=rel_merged.j, j=rel_merged.i).key_by('i','j').union(rel.key_by('i','j'))
 
 try:
-    related_in_ped = rel_merged.annotate(ped_relationship=ped_rels_ht_merged[rel_merged.key].ped_relationship)
+    rel_merged = rel_merged.annotate(ped_relationship=ped_rels_ht_merged[rel_merged.key].ped_relationship)
 except:  # no related in ped
-    related_in_ped = rel_merged.annotate(ped_relationship=hl.missing('str'))
-related_in_ped = related_in_ped.filter(hl.is_missing(related_in_ped.ped_relationship), keep=False)
+    rel_merged = rel_merged.annotate(ped_relationship=hl.missing('str'))
 
-unrelated_in_ped = rel.anti_join(related_in_ped).annotate(ped_relationship='unrelated')
+p = downsampled_unrelated_proportion
+related_in_ped_or_inferred_related = rel_merged.filter((hl.is_defined(rel_merged.ped_relationship)) |
+                                                       (rel_merged.relationship!='unrelated'))
+downsampled_unrelated = rel_merged.anti_join(related_in_ped_or_inferred_related).sample(p)
 
-p = 0.05
-only_related = unrelated_in_ped.filter(unrelated_in_ped.relationship!='unrelated')
-downsampled_unrelated = unrelated_in_ped.filter(unrelated_in_ped.relationship=='unrelated').sample(p)
+if p!=0:
+    rel_total = related_in_ped_or_inferred_related.union(downsampled_unrelated)
+else:
+    rel_total = related_in_ped_or_inferred_related
+    
+rel_total = rel_total.repartition(1000)
 
-rel_total = related_in_ped.union(only_related).union(downsampled_unrelated)
+# Fill missing ped_relationship with unrelated
+rel_total = rel_total.annotate(ped_relationship=hl.if_else(hl.is_defined(rel_total.ped_relationship), 
+                                                                 rel_total.ped_relationship, 'unrelated'))
 
-rel_df = rel_total.to_pandas()
-rel_df.to_csv(f"{cohort_prefix}_kinship.tsv.gz", sep='\t', index=False)
+# Write to intermediate HT before TSV export
+annot_kinship_ht_uri = 'NA'
+if presaved_kinship_ht_uri!='NA':
+    annot_kinship_ht_uri = f"{presaved_kinship_ht_uri.split('.ht')[0]}.annot.related.downsampled.{p}.ht"
+elif kinship_ht_uri!='NA':
+    annot_kinship_ht_uri = f"{kinship_ht_uri.split('.ht')[0]}.annot.related.downsampled.{p}.ht"
+if annot_kinship_ht_uri!='NA':
+    rel_total = rel_total.checkpoint(annot_kinship_ht_uri, overwrite=True)
+    print(f"Annotated kinship HT saved to:\n{annot_kinship_ht_uri}")
+
+# Export as gzipped TSV
+rel_total.export(f"{cohort_prefix}_kinship.tsv.bgz")
+
+# rel_df = rel_total.to_pandas()
+# rel_df.to_csv(f"{cohort_prefix}_kinship.tsv.gz", sep='\t', index=False)

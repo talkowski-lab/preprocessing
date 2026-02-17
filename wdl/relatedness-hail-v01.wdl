@@ -1,7 +1,7 @@
 version 1.0
 
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/mergeVCFs.wdl" as mergeVCFs
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/wdl/helpers.wdl" as helpers
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/mergeVCFs.wdl" as mergeVCFs
+import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/helpers.wdl" as helpers
 
 struct RuntimeAttr {
     Float? mem_gb
@@ -19,13 +19,18 @@ workflow Relatedness {
         File ped_uri
         File bed_file
         String cohort_prefix
-        String relatedness_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_relatedness_check_v0.1.py"
-        String plot_relatedness_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_relatedness_plot_v0.1.py"
-        String sex_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_impute_sex_v0.1.py"
+        String relatedness_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_relatedness_check_v0.1.py"
+        String plot_relatedness_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_relatedness_plot_v0.1.py"
+        String sex_qc_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_impute_sex_v0.1.py"
         String sv_base_mini_docker
         String hail_docker
         String bucket_id
         String genome_build
+        String x_metric='ibd0'
+        String y_metric='kin'
+        String kinship_ht_uri='NA'  # optionally write intermediate kinship HT
+        String presaved_kinship_ht_uri='NA'  # optionally load saved intermediate kinship HT
+        Float downsampled_unrelated_proportion=0.05
         Int chunk_size=0
         Boolean sort_after_merge=false
         Boolean split_multi=true
@@ -85,6 +90,9 @@ workflow Relatedness {
         bucket_id=bucket_id,
         genome_build=genome_build,
         score_table=false,
+        kinship_ht_uri=kinship_ht_uri,
+        presaved_kinship_ht_uri=presaved_kinship_ht_uri,
+        downsampled_unrelated_proportion=downsampled_unrelated_proportion,
         runtime_attr_override=runtime_attr_check_relatedness
     }
 
@@ -95,6 +103,8 @@ workflow Relatedness {
         cohort_prefix=cohort_prefix,
         plot_relatedness_script=plot_relatedness_script,
         hail_docker=hail_docker,
+        x_metric=x_metric,
+        y_metric=y_metric,
         chunk_size=chunk_size,
         runtime_attr_override=runtime_attr_plot_relatedness
     }
@@ -168,6 +178,9 @@ task checkRelatedness {
         String hail_docker
         String bucket_id
         String genome_build
+        String kinship_ht_uri
+        String presaved_kinship_ht_uri
+        Float downsampled_unrelated_proportion
         String score_table=false
         Boolean split_multi=true
         RuntimeAttr? runtime_attr_override
@@ -202,14 +215,17 @@ task checkRelatedness {
 
     command <<<
         set -eou pipefail
+        cpu_cores=$(nproc)
+        memory=$(awk '/MemTotal/ {printf "%.0f\n", $2/1024/1024}' /proc/meminfo)
+
         curl ~{relatedness_qc_script} > check_relatedness.py
-        python3 check_relatedness.py ~{vcf_uri} ~{cohort_prefix} ~{ped_uri} ~{cpu_cores} ~{memory} \
-        ~{bucket_id} ~{score_table} ~{genome_build} ~{split_multi} > stdout
+        python3 check_relatedness.py ~{vcf_uri} ~{cohort_prefix} ~{ped_uri} ${cpu_cores} ${memory} \
+        ~{bucket_id} ~{score_table} ~{genome_build} ~{split_multi} ~{kinship_ht_uri} ~{presaved_kinship_ht_uri} ~{downsampled_unrelated_proportion}
     >>>
 
     output {
         File relatedness_qc = cohort_prefix + "_relatedness_qc.ped"
-        File kinship_tsv = cohort_prefix + "_kinship.tsv.gz"
+        File kinship_tsv = cohort_prefix + "_kinship.tsv.bgz"
     }
 }
 
@@ -219,6 +235,8 @@ task plotRelatedness {
         File ped_uri
         String cohort_prefix
         String plot_relatedness_script
+        String x_metric
+        String y_metric
         String hail_docker
         Int chunk_size
         RuntimeAttr? runtime_attr_override
@@ -254,10 +272,10 @@ task plotRelatedness {
     command <<<
         set -eou pipefail
         curl ~{plot_relatedness_script} > plot_relatedness.py
-        python3 plot_relatedness.py ~{kinship_tsv} ~{cohort_prefix} ~{ped_uri} ~{chunk_size} > stdout
+        python3 plot_relatedness.py ~{kinship_tsv} ~{cohort_prefix} ~{ped_uri} ~{chunk_size} ~{x_metric} ~{y_metric} > stdout
     >>>
 
     output {
-        File relatedness_plot = "~{cohort_prefix}_relatedness_ibd0_kinship.png"
+        File relatedness_plot = "~{cohort_prefix}_relatedness_~{x_metric}_~{y_metric}.png"
     }
 }
