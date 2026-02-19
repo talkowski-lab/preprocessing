@@ -11,6 +11,7 @@ struct RuntimeAttr {
 
 workflow MergeVCFs {
     input {
+        File ref_fasta  # for normalizing VCFs
         # give either text file with VCF paths or Array[File] of VCF paths
         File? vcf_list_file
         Array[File]? vcf_files
@@ -58,6 +59,7 @@ workflow MergeVCFs {
             input:
             vcf_files=select_first([renameVCFSamples.renamed_vcf_files, resolved_input_vcf_files]),
             output_vcf_name=sample_set_id + '.merged.vcf.gz',
+            ref_fasta=ref_fasta,
             sv_base_mini_docker=sv_base_mini_docker,
             recalculate_af=recalculate_af
         }
@@ -126,6 +128,7 @@ task renameVCFSamples {
 task mergeVCFs {
     input {
         Array[File] vcf_files
+        File ref_fasta
         String output_vcf_name
         String sv_base_mini_docker
         Boolean recalculate_af=false
@@ -164,23 +167,43 @@ task mergeVCFs {
     command <<<
         set -euo pipefail
         VCFS="~{write_lines(vcf_files)}"
+
         cat $VCFS | awk -F '/' '{print $NF"\t"$0}' | sort -k1,1V | awk '{print $2}' > vcfs_sorted.list
+
+        # build a new list of normalized VCFs for merging
+        > vcfs_norm.list
+
         for vcf in $(cat vcfs_sorted.list);
         do
-            tabix $vcf;
+            # left-align and normalize (split multiallelics) each VCF first
+            base=$(basename "$vcf")
+            norm_vcf="norm_${base}"
+
+            bcftools norm -m- \
+                --keep-sum AD \
+                -f ~{ref_fasta} \
+                -Oz -o "$norm_vcf" "$vcf"
+
+            tabix -f "$norm_vcf"
+
+            echo "$norm_vcf" >> vcfs_norm.list
         done
-        bcftools merge -m none -Oz -o ~{output_vcf_name} --file-list vcfs_sorted.list
+
+        bcftools merge -m none -Oz -o ~{output_vcf_name} --file-list vcfs_norm.list
+
         if [ "~{fill_missing}" = "true" ]; then
             # move merged VCF to temporary file so final output has same filename, regardless of recalculate_af
             mv ~{output_vcf_name} tmp_~{output_vcf_name}
             bcftools +setGT -Oz -o ~{output_vcf_name} tmp_~{output_vcf_name} -- -t . -n 0
         fi
+
         if [ "~{recalculate_af}" = "true" ]; then
             # move merged VCF to temporary file so final output has same filename, regardless of recalculate_af
             mv ~{output_vcf_name} tmp_~{output_vcf_name}
             bcftools +fill-tags tmp_~{output_vcf_name} -Oz -o ~{output_vcf_name} -- -t AN,AC,AF
         fi
-        tabix ~{output_vcf_name}
+
+        tabix -f ~{output_vcf_name}
     >>>
 
     output {
