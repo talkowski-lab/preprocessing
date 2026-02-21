@@ -959,7 +959,6 @@ task mergeMTs {
     import pandas as pd
     import hail as hl
     import numpy as np
-    import pandas as pd
     import sys
     import os
 
