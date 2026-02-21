@@ -956,6 +956,7 @@ task mergeMTs {
     cat <<EOF > merge_mts.py
     import hail as hl
     import numpy as np
+    import pandas as pd
     import sys
     import os
 
