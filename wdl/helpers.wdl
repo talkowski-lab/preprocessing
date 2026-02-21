@@ -920,6 +920,7 @@ task subsetVCFSamplesHail {
 task mergeMTs {
     input {
         Array[String] mt_uris
+        String bucket_id
         String merged_filename
         Boolean join_outer = false
         String hail_docker
@@ -954,9 +955,10 @@ task mergeMTs {
 
     command <<<
     cat <<EOF > merge_mts.py
+    import datetime
+    import pandas as pd
     import hail as hl
     import numpy as np
-    import pandas as pd
     import sys
     import os
 
@@ -964,6 +966,7 @@ task mergeMTs {
     merged_filename = sys.argv[2]
     cores = sys.argv[3]
     mem = int(np.floor(float(sys.argv[4])))
+    bucket_id = sys.argv[5]
 
     hl.init(min_block_size=128, spark_conf={"spark.executor.cores": cores, 
                         "spark.executor.memory": f"{int(np.floor(mem*0.4))}g",
@@ -980,12 +983,12 @@ task mergeMTs {
         else:
             mt2 = hl.read_matrix_table(mt_uri)
             mt = mt.union_cols(mt2, row_join_type=~{if join_outer then "outer" else "inner"})
-    filename = "~{merged_filename}.mt"
+    filename = f"{bucket_id}/hail/merged_mt/{str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M'))}/{merged_filename}.mt"
     mt.write(filename, overwrite=True)
     pd.Series([filename]).to_csv('mt_uri.txt', index=False, header=None)
     EOF
 
-    python3 merge_mts.py ~{sep=',' mt_uris} ~{merged_filename} ~{cpu_cores} ~{memory}
+    python3 merge_mts.py ~{sep=',' mt_uris} ~{merged_filename} ~{cpu_cores} ~{memory} ~{bucket_id}
     >>>
 
     output {
