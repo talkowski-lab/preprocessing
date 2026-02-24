@@ -1012,7 +1012,7 @@ task mergeMTs {
             mt = hl.read_matrix_table(mt_uri)
         else:
             mt2 = hl.read_matrix_table(mt_uri)
-            mt = merge_mts(mt, mt2)
+            mt = merge_mts(mt, mt2, row_join_type)
     filename = f"{bucket_id}/hail/merged_mt/{str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M'))}/{merged_filename}.mt"
     mt.write(filename, overwrite=True)
     pd.Series([filename]).to_csv('mt_uri.txt', index=False, header=None)
