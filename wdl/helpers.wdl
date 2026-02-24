@@ -967,12 +967,42 @@ task mergeMTs {
     cores = sys.argv[3]
     mem = int(np.floor(float(sys.argv[4])))
     bucket_id = sys.argv[5]
+    row_join_type = sys.argv[6]
 
     hl.init(min_block_size=128, spark_conf={"spark.executor.cores": cores, 
                         "spark.executor.memory": f"{int(np.floor(mem*0.4))}g",
                         "spark.driver.cores": cores,
                         "spark.driver.memory": f"{int(np.floor(mem*0.4))}g"
                         }, tmp_dir="tmp", local_tmpdir="tmp")
+
+    def merge_mts(mt1, mt2, row_join_type):
+        if row_join_type == "outer":
+            # NOTE: For row fields shared between the two MTs,
+            # two sets of row fields are created to avoid collision —
+            # the second is suffixed "_1"
+            # In this scenario, for row keys that are shared,
+            # MT 1's row fields are in the first set of fields
+            # and MT 2's row fields are in the second set of fields
+            # For row keys in MT 1 only, row fields are in the first set
+            # of fields only and the second set of row fields are NA (+ vice versa)
+            # We will collapse these two sets of fields below
+            mt = mt1.union_cols(mt2, row_join_type=row_join_type, drop_right_row_fields=False)
+            # Get rows in second MT only
+            mt2_only_rows_ht = mt2.rows().anti_join(mt1.rows())
+            # Get row fields that collide between the two MTs
+            collide_fields = [f for f in mt1.row_value if f in mt2.row_value]
+            # If a row key is in MT 2 only, use the second set of colliding fields
+            # Otherwise, use the first set
+            mt = mt.annotate_rows(use_field2=hl.is_defined(mt2_only_rows_ht[mt.row_key]))
+            mt = mt.transmute_rows(
+                **{
+                    f: hl.if_else(mt.use_field2, mt[f"{f}_1"], mt[f]) for f in collide_fields
+                }
+            )
+            mt = mt.drop("use_field2")
+        else:
+            mt = mt1.union_cols(mt2)
+        return mt
 
     tot_mt = len(mt_uris)
     for i, mt_uri in enumerate(mt_uris):
@@ -982,13 +1012,19 @@ task mergeMTs {
             mt = hl.read_matrix_table(mt_uri)
         else:
             mt2 = hl.read_matrix_table(mt_uri)
-            mt = mt.union_cols(mt2, row_join_type="~{if join_outer then 'outer' else 'inner'}")
+            mt = merge_mts(mt, mt2)
     filename = f"{bucket_id}/hail/merged_mt/{str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M'))}/{merged_filename}.mt"
     mt.write(filename, overwrite=True)
     pd.Series([filename]).to_csv('mt_uri.txt', index=False, header=None)
     EOF
 
-    python3 merge_mts.py ~{sep=',' mt_uris} ~{merged_filename} ~{cpu_cores} ~{memory} ~{bucket_id}
+    python3 merge_mts.py \
+        ~{sep=',' mt_uris} \
+        ~{merged_filename} \
+        ~{cpu_cores} \
+        ~{memory} \
+        ~{bucket_id} \
+        ~{if join_outer then 'outer' else 'inner'}
     >>>
 
     output {
