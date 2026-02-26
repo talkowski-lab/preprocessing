@@ -999,7 +999,6 @@ task mergeMTs {
                     f: hl.if_else(mt.use_field2, mt[f"{f}_1"], mt[f]) for f in collide_fields
                 }
             )
-            mt = mt.drop("use_field2")
         else:
             mt = mt1.union_cols(mt2)
         return mt
