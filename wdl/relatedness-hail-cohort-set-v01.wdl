@@ -36,6 +36,7 @@ workflow RelatednessCohortSet {
         Int samples_per_chunk=0
         Boolean sort_after_merge=false
         Boolean split_multi=true
+        Array[String] format_fields_to_keep = ["GT", "AD", "DP"]
         RuntimeAttr? runtime_attr_rename_vcf
         RuntimeAttr? runtime_attr_subset_vcfs
         RuntimeAttr? runtime_attr_merge_vcfs
@@ -61,7 +62,7 @@ workflow RelatednessCohortSet {
             vcf_files=renameVCFSamplesWithCohort.renamed_vcf_file,
             output_vcf_name=merged_filename+'.vcf.gz',
             sv_base_mini_docker=sv_base_mini_docker,
-            keep_gt_ad_dp_only=true,
+            format_fields_to_keep=format_fields_to_keep,
             recalculate_af=true,
             runtime_attr_override=runtime_attr_merge_vcfs
         }
