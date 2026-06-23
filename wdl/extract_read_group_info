@@ -1,0 +1,145 @@
+version 1.0
+
+workflow ExtractReadGroup {
+  meta {
+    description: "Extract all read group information from a BAM or CRAM file"
+  }
+
+  input {
+    File  input_bam
+    File? ref_fasta
+    File? ref_fasta_fai
+
+    Int cpu     = 2
+    Int mem_gb  = 4
+    Int disk_gb = 50
+  }
+
+  call GetReadGroups {
+    input:
+      input_bam     = input_bam,
+      ref_fasta     = ref_fasta,
+      ref_fasta_fai = ref_fasta_fai,
+      cpu           = cpu,
+      mem_gb        = mem_gb,
+      disk_gb       = disk_gb
+  }
+
+  output {
+    File          read_group_file = GetReadGroups.read_group_file
+    Array[String] read_groups     = GetReadGroups.read_groups
+
+    Array[String] rg_ids          = GetReadGroups.rg_ids
+    Array[String] rg_lbs          = GetReadGroups.rg_lbs
+    Array[String] rg_pus          = GetReadGroups.rg_pus
+    Array[String] rg_sms          = GetReadGroups.rg_sms
+    Array[String] rg_pls          = GetReadGroups.rg_pls
+    Array[String] rg_cns          = GetReadGroups.rg_cns
+    Array[String] rg_pms          = GetReadGroups.rg_pms
+    Array[String] rg_dts          = GetReadGroups.rg_dts
+  }
+}
+
+task GetReadGroups {
+  input {
+    File  input_bam
+    File? ref_fasta
+    File? ref_fasta_fai
+    Int   cpu     = 2
+    Int   mem_gb  = 4
+    Int   disk_gb = 50
+  }
+
+  Boolean has_ref = defined(ref_fasta)
+
+  command <<<
+    set -euo pipefail
+
+    REF_ARGS=""
+    if ~{true="true" false="false" has_ref} ; then
+      REF_ARGS="--reference ~{ref_fasta}"
+    fi
+
+    # Extract all @RG lines from header
+    samtools view -H $REF_ARGS ~{input_bam} \
+      | grep "^@RG" \
+      > read_group.txt
+
+    if [ ! -s read_group.txt ]; then
+      echo "Error: no read group found in ~{input_bam}" >&2
+      exit 1
+    fi
+
+    echo "Found $(wc -l < read_group.txt) read group(s):"
+    cat read_group.txt
+
+    # Helper: extract a tag from a given RG line
+    extract_tag() {
+      local line="$1"
+      local tag="$2"
+      echo "$line" | grep -oP "(?<=\t${tag}:)[^\t]+" || true
+    }
+
+    # Clear output files
+    > rg_escaped.tsv
+    > rg_ids.txt
+    > rg_lbs.txt
+    > rg_pus.txt
+    > rg_sms.txt
+    > rg_pls.txt
+    > rg_cns.txt
+    > rg_pms.txt
+    > rg_dts.txt
+
+    # Iterate over every RG line
+    while IFS= read -r rg_line; do
+      extract_tag "$rg_line" "ID" >> rg_ids.txt
+      extract_tag "$rg_line" "LB" >> rg_lbs.txt
+      extract_tag "$rg_line" "PU" >> rg_pus.txt
+      extract_tag "$rg_line" "SM" >> rg_sms.txt
+      extract_tag "$rg_line" "PL" >> rg_pls.txt
+      extract_tag "$rg_line" "CN" >> rg_cns.txt
+      extract_tag "$rg_line" "PM" >> rg_pms.txt
+      extract_tag "$rg_line" "DT" >> rg_dts.txt
+
+      # Escaped full RG string (tabs -> \t) for use as bwa-mem2 -R argument
+      echo "$rg_line" \
+        | tr '\t' '\n' \
+        | paste -sd '\t' - \
+        | sed 's/\t/\\t/g' \
+        >> rg_escaped.tsv
+    done < read_group.txt
+
+    echo "--- Parsed RG fields ---"
+    echo "IDs: $(cat rg_ids.txt | tr '\n' ' ')"
+    echo "LBs: $(cat rg_lbs.txt | tr '\n' ' ')"
+    echo "PUs: $(cat rg_pus.txt | tr '\n' ' ')"
+    echo "SMs: $(cat rg_sms.txt | tr '\n' ' ')"
+    echo "PLs: $(cat rg_pls.txt | tr '\n' ' ')"
+    echo "CNs: $(cat rg_cns.txt | tr '\n' ' ')"
+    echo "PMs: $(cat rg_pms.txt | tr '\n' ' ')"
+    echo "DTs: $(cat rg_dts.txt | tr '\n' ' ')"
+  >>>
+
+  output {
+    File          read_group_file = "read_group.txt"
+    Array[String] read_groups     = read_lines("rg_escaped.tsv")
+
+    Array[String] rg_ids          = read_lines("rg_ids.txt")
+    Array[String] rg_lbs          = read_lines("rg_lbs.txt")
+    Array[String] rg_pus          = read_lines("rg_pus.txt")
+    Array[String] rg_sms          = read_lines("rg_sms.txt")
+    Array[String] rg_pls          = read_lines("rg_pls.txt")
+    Array[String] rg_cns          = read_lines("rg_cns.txt")
+    Array[String] rg_pms          = read_lines("rg_pms.txt")
+    Array[String] rg_dts          = read_lines("rg_dts.txt")
+  }
+
+  runtime {
+    docker:      "staphb/samtools:1.17"
+    cpu:         cpu
+    memory:      mem_gb + " GB"
+    disks:       "local-disk " + disk_gb + " HDD"
+    preemptible: 1
+  }
+}
