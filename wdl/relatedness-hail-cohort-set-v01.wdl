@@ -40,6 +40,7 @@ workflow RelatednessCohortSet {
         RuntimeAttr? runtime_attr_rename_vcf
         RuntimeAttr? runtime_attr_subset_vcfs
         RuntimeAttr? runtime_attr_merge_vcfs
+        RuntimeAttr? runtime_attr_merge_peds
         RuntimeAttr? runtime_attr_impute_sex
         RuntimeAttr? runtime_attr_hail_pca
         RuntimeAttr? runtime_attr_check_relatedness
@@ -76,7 +77,8 @@ workflow RelatednessCohortSet {
             cohort_prefixes=cohort_prefixes,
             merged_filename=merged_filename,
             hail_docker=hail_docker,
-            input_size=size(ped_uri, 'GB')
+            input_size=size(ped_uri, 'GB'),
+            runtime_attr_override=runtime_attr_merge_peds
     }
 
     if (samples_per_chunk==0) {
