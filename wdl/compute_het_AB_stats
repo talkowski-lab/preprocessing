@@ -1,0 +1,529 @@
+version 1.0
+
+workflow compute_het_ab_stats {
+
+    input {
+        File   vcf
+        File   vcf_index
+        Int    min_gq          = 20
+        Int    min_ad_total    = 10
+        String docker
+        Int    mem_gb
+        Int    cpu             = 4
+
+        # Optional: BED file of SVs/CNVs to validate with het AB
+        File?  cnv_bed
+    }
+
+    # Original genome-wide task (unchanged)
+    call ComputeHetAB {
+        input:
+            vcf          = vcf,
+            vcf_index    = vcf_index,
+            min_gq       = min_gq,
+            min_ad_total = min_ad_total,
+            docker       = docker,
+            mem_gb       = mem_gb,
+            cpu          = cpu
+    }
+
+    # Optional CNV validation task
+    if (defined(cnv_bed)) {
+        call ComputeCNVHetAB {
+            input:
+                vcf          = vcf,
+                vcf_index    = vcf_index,
+                cnv_bed      = select_first([cnv_bed]),
+                min_gq       = min_gq,
+                min_ad_total = min_ad_total,
+                docker       = docker,
+                mem_gb       = mem_gb,
+                cpu          = cpu
+        }
+    }
+
+    output {
+        File  het_ab_stats              = ComputeHetAB.het_ab_stats
+        File? cnv_het_ab_stats          = ComputeCNVHetAB.cnv_het_ab_stats
+        File? cnv_het_ab_raw            = ComputeCNVHetAB.cnv_het_ab_raw
+        File? cnv_het_ab_variant_summary = ComputeCNVHetAB.cnv_het_ab_variant_summary
+    }
+
+    meta {
+        author      : "Generated WDL"
+        description : "Compute het AB statistics per sample per chrom for triploidy detection; optionally validate CNVs via het AB"
+    }
+}
+
+# ── Original genome-wide task ─────────────────────────────────────────────────
+task ComputeHetAB {
+    input {
+        File   vcf
+        File   vcf_index
+        Int    min_gq
+        Int    min_ad_total
+        String docker
+        Int    mem_gb
+        Int    cpu
+        Int    disk_gb = ceil(size(vcf, "GiB") * 2) + 500
+    }
+
+    command <<<
+        set -euo pipefail
+
+        bcftools view \
+            --exclude-type other \
+            --include 'FILTER="PASS" || FILTER="."' \
+            --threads ~{cpu} \
+            ~{vcf} \
+        | bcftools query \
+            -f '[%CHROM\t%SAMPLE\t%GT\t%GQ\t%AD\n]' \
+            -o raw_genotypes.tsv
+
+        echo "Total lines extracted: $(wc -l < raw_genotypes.tsv)" >&2
+        head -3 raw_genotypes.tsv >&2
+
+        python3 -c "
+import re, sys
+from collections import defaultdict
+
+min_gq       = ~{min_gq}
+min_ad_total = ~{min_ad_total}
+
+DIPLOID_LO = 0.40
+DIPLOID_HI = 0.50
+TRIP_LO1   = 0.28
+TRIP_HI1   = 0.38
+
+HET_RE = re.compile(r'^(0[/|][1-9][0-9]*|[1-9][0-9]*[/|]0)$')
+
+ab_vals = defaultdict(list)
+
+with open('raw_genotypes.tsv') as fh:
+    for line in fh:
+        parts = line.rstrip('\n').split('\t')
+        if len(parts) < 5:
+            continue
+        chrom, sample, gt, gq_s, ad_s = parts
+
+        if not HET_RE.match(gt):
+            continue
+
+        try:
+            if float(gq_s) < min_gq:
+                continue
+        except ValueError:
+            continue
+
+        try:
+            ad     = ad_s.split(',')
+            ref_ad = float(ad[0])
+            alt_ad = float(ad[1])
+            total  = ref_ad + alt_ad
+            if total < min_ad_total:
+                continue
+            ab = min(ref_ad, alt_ad) / total
+        except (ValueError, IndexError):
+            continue
+
+        ab_vals[(sample, chrom)].append(ab)
+
+with open('het_ab_stats.tsv', 'w') as out:
+    out.write('sample\tchrom\tn_het\tmean_ab\tmedian_ab\t'
+              'frac_diploid\tfrac_trip\ttriploid_score\n')
+    for (sample, chrom), vals in sorted(ab_vals.items()):
+        n = len(vals)
+        if n == 0:
+            continue
+        mean_ab   = sum(vals) / n
+        svals     = sorted(vals)
+        median_ab = svals[n // 2] if n % 2 else (svals[n//2 - 1] + svals[n//2]) / 2
+
+        frac_diploid   = sum(DIPLOID_LO <= v <= DIPLOID_HI for v in vals) / n
+        frac_trip      = sum(TRIP_LO1   <= v <= TRIP_HI1   for v in vals) / n
+        triploid_score = frac_trip - frac_diploid
+
+        out.write(f'{sample}\t{chrom}\t{n}\t{mean_ab:.4f}\t{median_ab:.4f}\t'
+                  f'{frac_diploid:.4f}\t{frac_trip:.4f}\t{triploid_score:.4f}\n')
+
+print(f'Done. Wrote stats for {len(ab_vals)} sample-chrom combinations.', file=sys.stderr)
+"
+    >>>
+
+    output {
+        File het_ab_stats = "het_ab_stats.tsv"
+    }
+
+    runtime {
+        docker      : docker
+        memory      : "~{mem_gb} GiB"
+        cpu         : cpu
+        disks       : "local-disk ~{disk_gb} HDD"
+        preemptible : 2
+    }
+}
+
+# ── CNV validation task ───────────────────────────────────────────────────────
+task ComputeCNVHetAB {
+    input {
+        File   vcf
+        File   vcf_index
+        File   cnv_bed
+        Int    min_gq
+        Int    min_ad_total
+        String docker
+        Int    mem_gb
+        Int    cpu
+        Int    disk_gb = ceil(size(vcf, "GiB") * 2) + 500
+    }
+
+    command <<<
+        set -euo pipefail
+
+        # ── Step 1: extract unique samples from BED ───────────────────────────
+        tail -n +2 ~{cnv_bed} \
+            | awk '{print $6}' \
+            | sort -u \
+            > samples_of_interest.txt
+
+        echo "Samples to query: $(cat samples_of_interest.txt | tr '\n' ' ')" >&2
+
+        # ── Step 2: build merged regions BED for bcftools query ───────────────
+        tail -n +2 ~{cnv_bed} \
+            | awk 'BEGIN{OFS="\t"} {print $1, $2+1, $3}' \
+            | sort -k1,1 -k2,2n \
+            | bedtools merge -i stdin \
+            > merged_regions.bed
+
+        echo "Merged query regions:" >&2
+        cat merged_regions.bed >&2
+
+        # ── Step 3: extract genotypes for samples of interest in CNV regions ──
+        bcftools view \
+            --exclude-type other \
+            --include 'FILTER="PASS" || FILTER="."' \
+            --samples-file samples_of_interest.txt \
+            --regions-file merged_regions.bed \
+            --threads ~{cpu} \
+            ~{vcf} \
+        | bcftools query \
+            -f '[%CHROM\t%POS\t%SAMPLE\t%GT\t%GQ\t%AD\n]' \
+            -o raw_cnv_genotypes.tsv
+
+        echo "Genotype lines extracted: $(wc -l < raw_cnv_genotypes.tsv)" >&2
+
+        # ── Step 4: match SNVs to CNV intervals, compute AB, write outputs ────
+        python3 -c "
+import re, sys
+from collections import defaultdict, OrderedDict
+
+min_gq       = ~{min_gq}
+min_ad_total = ~{min_ad_total}
+
+DIPLOID_LO = 0.40
+DIPLOID_HI = 0.50
+TRIP_LO    = 0.28
+TRIP_HI    = 0.38
+
+HET_RE = re.compile(r'^(0[/|][1-9][0-9]*|[1-9][0-9]*[/|]0)$')
+HOM_RE = re.compile(r'^([0-9]+)[/|]\1$')
+
+# ── Helper: nan-safe float formatter ─────────────────────────────────────────
+def fmt(x):
+    return f'{x:.4f}' if x == x else 'NA'
+
+# ── Helper: compute interpretation call and stats for one sample-variant ──────
+def interp_call(svtype, vals, n_het, n_hom, n_other):
+    n = len(vals)
+    if n == 0:
+        return 'NO_HET_SNVs', float('nan'), float('nan'), float('nan'), float('nan')
+    mean_ab   = sum(vals) / n
+    svals     = sorted(vals)
+    median_ab = svals[n // 2] if n % 2 else (svals[n//2-1] + svals[n//2]) / 2
+    frac_dip  = sum(DIPLOID_LO <= x <= DIPLOID_HI for x in vals) / n
+    frac_dup  = sum(TRIP_LO    <= x <= TRIP_HI    for x in vals) / n
+
+    if svtype == 'DUP':
+        if frac_dup >= 0.30 and median_ab < 0.42:
+            call = 'SUPPORTS_DUP'
+        elif frac_dip >= 0.50:
+            call = 'DIPLOID_AB_NO_DUP_SIGNAL'
+        else:
+            call = 'AMBIGUOUS'
+    elif svtype == 'DEL':
+        total_gts = n_het + n_hom + n_other
+        hom_rate  = n_hom / total_gts if total_gts > 0 else 0
+        if hom_rate >= 0.50:
+            call = 'SUPPORTS_DEL_HOM_DROPOUT'
+        elif n_het < 5:
+            call = 'TOO_FEW_HETS_FOR_DEL'
+        elif frac_dip >= 0.50:
+            call = 'DIPLOID_AB_NO_DEL_SIGNAL'
+        else:
+            call = 'AMBIGUOUS'
+    else:
+        call = 'UNKNOWN_SVTYPE'
+
+    return call, mean_ab, median_ab, frac_dip, frac_dup
+
+# ── Load CNV BED ──────────────────────────────────────────────────────────────
+# Flexible schema:
+#   7-col: chrom start end name svtype sample CPX_INTERVALS
+#   8-col: chrom start end variant_name svtype sample batch CN
+# try/except on int conversion silently skips header and malformed rows
+variants = []
+with open('~{cnv_bed}') as fh:
+    for line in fh:
+        line = line.rstrip('\n')
+        if not line:
+            continue
+        parts = line.split('\t')
+        if len(parts) < 6:
+            continue
+        try:
+            start = int(parts[1])
+            end   = int(parts[2])
+        except ValueError:
+            continue
+        chrom  = parts[0]
+        vname  = parts[3]
+        svtype = parts[4].upper()
+        sample = parts[5]
+        batch  = parts[6] if len(parts) > 6 else 'NA'
+        cn     = parts[7] if len(parts) > 7 else 'NA'
+        variants.append({
+            'chrom'  : chrom,
+            'start'  : start,
+            'end'    : end,
+            'name'   : vname,
+            'svtype' : svtype,
+            'sample' : sample,
+            'batch'  : batch,
+            'cn'     : cn,
+        })
+
+print(f'Loaded {len(variants)} CNV records', file=sys.stderr)
+
+# Index variants by (chrom, sample) for fast overlap lookup
+var_index = defaultdict(list)
+for v in variants:
+    var_index[(v['chrom'], v['sample'])].append(v)
+
+# Per-(variant, sample) accumulators
+raw_rows = []
+agg_data = defaultdict(lambda: {'ab_vals': [], 'n_hom': 0, 'n_het': 0, 'n_other': 0})
+
+# Metadata map: (variant_name, sample) -> variant dict
+var_meta = {}
+for v in variants:
+    key = (v['name'], v['sample'])
+    var_meta[key] = v
+
+# ── Stream genotype file ──────────────────────────────────────────────────────
+with open('raw_cnv_genotypes.tsv') as fh:
+    for line in fh:
+        parts = line.rstrip('\n').split('\t')
+        if len(parts) < 6:
+            continue
+        chrom, pos_s, sample, gt, gq_s, ad_s = parts
+        pos = int(pos_s)
+
+        overlapping = [
+            v for v in var_index.get((chrom, sample), [])
+            if v['start'] <= pos <= v['end']
+        ]
+        if not overlapping:
+            continue
+
+        try:
+            if float(gq_s) < min_gq:
+                continue
+        except ValueError:
+            continue
+
+        try:
+            ad     = ad_s.split(',')
+            ref_ad = float(ad[0])
+            alt_ad = float(ad[1])
+            total  = ref_ad + alt_ad
+        except (ValueError, IndexError):
+            continue
+
+        is_het = bool(HET_RE.match(gt))
+        is_hom = bool(HOM_RE.match(gt))
+
+        for v in overlapping:
+            key = (v['name'], v['sample'])
+
+            if is_het:
+                if total < min_ad_total:
+                    continue
+                ab = min(ref_ad, alt_ad) / total
+                agg_data[key]['ab_vals'].append(ab)
+                agg_data[key]['n_het'] += 1
+                raw_rows.append('\t'.join([
+                    v['name'], v['svtype'], v['sample'], v['batch'], v['cn'],
+                    chrom, pos_s, gt, gq_s,
+                    f'{ref_ad:.0f}', f'{alt_ad:.0f}', f'{ab:.4f}'
+                ]))
+            elif is_hom:
+                agg_data[key]['n_hom'] += 1
+            else:
+                agg_data[key]['n_other'] += 1
+
+# ── Output 1: raw het SNV calls ───────────────────────────────────────────────
+with open('cnv_het_ab_raw.tsv', 'w') as out:
+    out.write('variant_name\tsvtype\tsample\tbatch\tcn\t'
+              'chrom\tpos\tgt\tgq\tref_ad\talt_ad\tab\n')
+    for row in raw_rows:
+        out.write(row + '\n')
+
+print(f'Raw file: {len(raw_rows)} het SNV rows', file=sys.stderr)
+
+# ── Output 2: per-(variant, sample) aggregated stats ─────────────────────────
+with open('cnv_het_ab_stats.tsv', 'w') as out:
+    out.write(
+        'variant_name\tsvtype\tsample\tbatch\tcn\tchrom\tstart\tend\t'
+        'n_het\tn_hom\tn_other\t'
+        'mean_ab\tmedian_ab\t'
+        'frac_diploid\tfrac_dup_trip\t'
+        'ab_interpretation\n'
+    )
+    for key in sorted(var_meta.keys()):
+        v    = var_meta[key]
+        data = agg_data[key]
+        vals = data['ab_vals']
+
+        call, mean_ab, median_ab, frac_dip, frac_dup = interp_call(
+            v['svtype'], vals,
+            data['n_het'], data['n_hom'], data['n_other']
+        )
+
+        out.write(
+            f\"{v['name']}\t{v['svtype']}\t{v['sample']}\t{v['batch']}\t{v['cn']}\t\"
+            f\"{v['chrom']}\t{v['start']}\t{v['end']}\t\"
+            f\"{data['n_het']}\t{data['n_hom']}\t{data['n_other']}\t\"
+            f\"{fmt(mean_ab)}\t{fmt(median_ab)}\t\"
+            f\"{fmt(frac_dip)}\t{fmt(frac_dup)}\t\"
+            f\"{call}\n\"
+        )
+
+print('Done writing per-sample stats.', file=sys.stderr)
+
+# ── Output 3: per-variant summary across all samples ─────────────────────────
+# Unique variant names in BED order, preserving first-seen metadata
+seen_vnames = OrderedDict()
+for v in variants:
+    if v['name'] not in seen_vnames:
+        seen_vnames[v['name']] = v
+
+# Samples per variant
+samples_per_variant = defaultdict(list)
+for v in variants:
+    samples_per_variant[v['name']].append(v['sample'])
+
+with open('cnv_het_ab_variant_summary.tsv', 'w') as out:
+    out.write(
+        'variant_name\tsvtype\tchrom\tstart\tend\t'
+        'n_samples_in_bed\t'
+        'n_samples_with_hets\t'
+        'n_supports\t'
+        'n_diploid_no_signal\t'
+        'n_ambiguous\t'
+        'n_no_het_snvs\t'
+        'median_ab_across_samples\t'
+        'mean_ab_across_samples\t'
+        'frac_samples_supporting\t'
+        'variant_verdict\n'
+    )
+
+    for vname, vmeta in seen_vnames.items():
+        svtype      = vmeta['svtype']
+        bed_samples = samples_per_variant[vname]
+        n_in_bed    = len(bed_samples)
+
+        sample_median_abs = []
+        n_supports        = 0
+        n_diploid         = 0
+        n_ambiguous       = 0
+        n_no_hets         = 0
+        n_with_hets       = 0
+
+        for samp in bed_samples:
+            key  = (vname, samp)
+            data = agg_data[key]
+            vals = data['ab_vals']
+
+            call, _, median_ab, _, _ = interp_call(
+                svtype, vals,
+                data['n_het'], data['n_hom'], data['n_other']
+            )
+
+            if call in ('SUPPORTS_DUP', 'SUPPORTS_DEL_HOM_DROPOUT'):
+                n_supports += 1
+            elif call in ('DIPLOID_AB_NO_DUP_SIGNAL', 'DIPLOID_AB_NO_DEL_SIGNAL'):
+                n_diploid += 1
+            elif call in ('NO_HET_SNVs', 'TOO_FEW_HETS_FOR_DEL'):
+                n_no_hets += 1
+            else:
+                n_ambiguous += 1
+
+            if len(vals) > 0:
+                n_with_hets += 1
+                sample_median_abs.append(median_ab)
+
+        # Median and mean of per-sample median ABs
+        if sample_median_abs:
+            sma   = sorted(sample_median_abs)
+            nm    = len(sma)
+            cross_median = sma[nm//2] if nm % 2 else (sma[nm//2-1] + sma[nm//2]) / 2
+            cross_mean   = sum(sma) / nm
+        else:
+            cross_median = float('nan')
+            cross_mean   = float('nan')
+
+        # Fraction of evaluable samples supporting the call
+        frac_support = (n_supports / n_with_hets) if n_with_hets > 0 else float('nan')
+
+        # Variant-level verdict
+        if n_with_hets == 0:
+            verdict = 'NO_EVALUABLE_SAMPLES'
+        elif frac_support >= 0.50:
+            verdict = 'LIKELY_REAL'
+        elif frac_support <= 0.15:
+            verdict = 'LIKELY_ARTIFACT'
+        else:
+            verdict = 'UNCERTAIN'
+
+        out.write(
+            f'{vname}\t{svtype}\t{vmeta[\"chrom\"]}\t{vmeta[\"start\"]}\t{vmeta[\"end\"]}\t'
+            f'{n_in_bed}\t'
+            f'{n_with_hets}\t'
+            f'{n_supports}\t'
+            f'{n_diploid}\t'
+            f'{n_ambiguous}\t'
+            f'{n_no_hets}\t'
+            f'{fmt(cross_median)}\t'
+            f'{fmt(cross_mean)}\t'
+            f'{fmt(frac_support)}\t'
+            f'{verdict}\n'
+        )
+
+print('Done writing variant summary.', file=sys.stderr)
+"
+    >>>
+
+    output {
+        File cnv_het_ab_raw             = "cnv_het_ab_raw.tsv"
+        File cnv_het_ab_stats           = "cnv_het_ab_stats.tsv"
+        File cnv_het_ab_variant_summary = "cnv_het_ab_variant_summary.tsv"
+    }
+
+    runtime {
+        docker      : docker
+        memory      : "~{mem_gb} GiB"
+        cpu         : cpu
+        disks       : "local-disk ~{disk_gb} HDD"
+        preemptible : 2
+    }
+}
