@@ -1,8 +1,8 @@
 version 1.0
 
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/helpers.wdl" as helpers
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/mergeVCFs.wdl" as mergeVCFs
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/mergeVCFSamples.wdl" as mergeVCFSamples
+import "helpers.wdl" as helpers
+import "mergeVCFs.wdl" as mergeVCFs
+import "mergeVCFSamples.wdl" as mergeVCFSamples
 
 struct RuntimeAttr {
     Float? mem_gb
@@ -24,7 +24,7 @@ workflow MergeVCFSamples {
         String sv_base_mini_docker
 
         String genome_build='GRCh38'
-        String hail_merge_vcf_samples_script="https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_merge_vcf_samples.py"
+        String hail_merge_vcf_samples_script="https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_merge_vcf_samples.py"
     }
 
     scatter (vcf_file in cohort_vcf_files) {

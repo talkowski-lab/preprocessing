@@ -1,8 +1,8 @@
 version 1.0
 
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/helpers.wdl" as helpers
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/mergeVCFs.wdl" as mergeVCFs
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/mergeVCFSamples.wdl" as mergeVCFSamples
+import "helpers.wdl" as helpers
+import "mergeVCFs.wdl" as mergeVCFs
+import "mergeVCFSamples.wdl" as mergeVCFSamples
 
 struct RuntimeAttr {
     Float? mem_gb

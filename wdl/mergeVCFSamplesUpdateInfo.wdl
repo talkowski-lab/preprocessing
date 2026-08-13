@@ -12,7 +12,7 @@ struct RuntimeAttr {
 workflow MergeVCFSamplesUpdateInfo {
     input {
         Array[File] vcf_files
-        String merge_vcf_samples_update_info_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_merge_vcf_samples_update_info.py"
+        String merge_vcf_samples_update_info_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_merge_vcf_samples_update_info.py"
         String hail_docker
         String prefix
 

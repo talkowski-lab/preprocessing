@@ -1,8 +1,8 @@
 version 1.0
 
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/mergeVCFSamples.wdl" as mergeVCFSamples
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/helpers.wdl" as helpers
-import "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/wdl/ancestry-inference-hail-v01.wdl" as AncestryInference
+import "mergeVCFSamples.wdl" as mergeVCFSamples
+import "helpers.wdl" as helpers
+import "ancestry-inference-hail-v01.wdl" as AncestryInference
 
 struct RuntimeAttr {
     Float? mem_gb
@@ -24,7 +24,7 @@ workflow AncestryInferenceCohortSet {
         File gnomad_rf_onnx
         File pop_labels_tsv
         String gnomad_loading_ht
-        String infer_ancestry_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/eren_dev/scripts/hail_infer_ancestry_v0.1.py"
+        String infer_ancestry_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_infer_ancestry_v0.1.py"
 
         Array[String] cohort_prefixes
         String cohort_prefix
