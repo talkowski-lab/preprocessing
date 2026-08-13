@@ -1,8 +1,6 @@
 version 1.0
 
 import "helpers.wdl" as helpers
-import "mergeVCFs.wdl" as mergeVCFs
-import "mergeVCFSamples.wdl" as mergeVCFSamples
 
 struct RuntimeAttr {
     Float? mem_gb
@@ -16,7 +14,7 @@ struct RuntimeAttr {
 workflow MergeVCFSamples {
     input {
         Array[File] cohort_vcf_files
-        Array[String] samples_array
+        File sample_tsv
 
         Array[String] cohort_prefixes
         String merged_prefix
@@ -31,7 +29,7 @@ workflow MergeVCFSamples {
         call helpers.subsetVCFSamples as subsetCohortVCFSamples {
             input:
             vcf_file=vcf_file,
-            samples_file=write_lines(samples_array),
+            sample_tsv=sample_tsv,
             docker=sv_base_mini_docker
         }
     }

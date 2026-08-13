@@ -16,8 +16,8 @@ struct RuntimeAttr {
 workflow SubsetVCFSamples {
     input {
         Array[File] vcf_files
-        Array[String] samples_array
-
+        File sample_tsv
+        String? output_vcf_prefix
         String sv_base_mini_docker
     }
 
@@ -25,7 +25,8 @@ workflow SubsetVCFSamples {
         call helpers.subsetVCFSamples as subsetVCFSamples {
             input:
             vcf_file=vcf_file,
-            samples_file=write_lines(samples_array),
+            sample_tsv=sample_tsv,
+            output_vcf_prefix=output_vcf_prefix,
             docker=sv_base_mini_docker
         }
     }

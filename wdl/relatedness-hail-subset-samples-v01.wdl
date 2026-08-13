@@ -112,7 +112,7 @@ workflow Relatedness {
     scatter (sample_file in splitSamples.sample_shard_files) {
         call helpers.subsetVCFSamplesHail as subsetVCFSamples {
             input:
-                samples_file=sample_file,
+                sample_tsv=sample_file,
                 vcf_file=merged_vcf_file,
                 hail_docker=hail_docker,
                 genome_build=genome_build

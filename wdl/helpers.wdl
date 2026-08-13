@@ -246,7 +246,7 @@ task splitSamples {
 
     command <<<
         set -eou pipefail
-        bcftools query -l ~{vcf_file} > ~{cohort_prefix}_samples.txt
+        bcftools query -l ~{vcf_file} > ~{cohort_prefix}_samples.tsv
 
         cat <<EOF > split_samples.py 
         import os
@@ -257,7 +257,7 @@ task splitSamples {
         cohort_prefix = sys.argv[1]
         samples_per_chunk = int(sys.argv[2])
 
-        samples = sorted(pd.read_csv(f"{cohort_prefix}_samples.txt", header=None)[0].tolist())
+        samples = sorted(pd.read_csv(f"{cohort_prefix}_samples.tsv", header=None)[0].tolist())
         
         # Split samples into chunks of the specified size
         n = samples_per_chunk  # number of samples in each chunk
@@ -270,14 +270,14 @@ task splitSamples {
                 shard_samples.append(chunk1 + chunk2)
 
         for i, shard in enumerate(shard_samples):
-            pd.Series(shard).to_csv(f"{cohort_prefix}_shard_{i}.txt", index=False, header=None)
+            pd.Series(shard).to_csv(f"{cohort_prefix}_shard_{i}.tsv", index=False, header=None)
         EOF
 
         python3 split_samples.py ~{cohort_prefix} ~{samples_per_chunk}
     >>>
 
     output {
-        Array[File] sample_shard_files = glob("~{cohort_prefix}_shard_*.txt")
+        Array[File] sample_shard_files = glob("~{cohort_prefix}_shard_*.tsv")
     }
 }
 
@@ -788,7 +788,8 @@ task filterIntervalsToVCF {
 task subsetVCFSamples {
         input {
         File vcf_file
-        File samples_file  # .txt extension  
+        File sample_tsv
+        String? output_vcf_prefix
         String docker
         RuntimeAttr? runtime_attr_override
     }
@@ -820,21 +821,24 @@ task subsetVCFSamples {
         bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
     }
 
+    String final_output_vcf_prefix = select_first([output_vcf_prefix, basename(sample_tsv, '.tsv')])
+
     command <<<
-    bcftools view -S ~{samples_file} --force-samples --no-update -Oz -o ~{basename(samples_file, '.txt')+'.vcf.gz'} ~{vcf_file}
-    tabix ~{basename(samples_file, '.txt')+'.vcf.gz'}
+    bcftools view -S ~{sample_tsv} --force-samples --no-update -Oz -o ~{final_output_vcf_prefix+'.vcf.gz'} ~{vcf_file}
+    tabix ~{final_output_vcf_prefix+'.vcf.gz'}
     >>>
 
     output {
-        File vcf_subset = basename(samples_file, '.txt') + '.vcf.gz'
-        File vcf_subset_idx = basename(samples_file, '.txt') + '.vcf.gz.tbi'
+        File vcf_subset = final_output_vcf_prefix + '.vcf.gz'
+        File vcf_subset_idx = final_output_vcf_prefix + '.vcf.gz.tbi'
     }
 }
 
 task subsetVCFSamplesHail {
     input {
         File vcf_file
-        File samples_file  # .txt extension  
+        File sample_tsv
+        String? output_vcf_prefix
         String hail_docker
         String genome_build='GRCh38'
         RuntimeAttr? runtime_attr_override
@@ -867,6 +871,8 @@ task subsetVCFSamplesHail {
         bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
     }
 
+    String final_output_vcf_prefix = select_first([output_vcf_prefix, basename(sample_tsv, '.tsv')])
+
     command <<<
     cat <<EOF > subset_samples.py
     import datetime
@@ -877,7 +883,8 @@ task subsetVCFSamplesHail {
     import os
 
     vcf_file = sys.argv[1]
-    samples_file = sys.argv[2]
+    sample_tsv = sys.argv[2]
+    out_prefix = sys.argv[3]
     cores = sys.argv[3]
     mem = int(np.floor(float(sys.argv[4])))
     genome_build = sys.argv[5]
@@ -891,29 +898,25 @@ task subsetVCFSamplesHail {
     mt = hl.import_vcf(vcf_file, reference_genome = genome_build, array_elements_required=False, force_bgz=True)
     header = hl.get_vcf_metadata(vcf_file)
 
-    samples = pd.read_csv(samples_file, header=None)[0].astype(str).tolist()
-    try:
-        # for haploid (e.g. chrY)
-        mt = mt.annotate_entries(
-            GT = hl.if_else(
-                    mt.GT.ploidy == 1, 
-                    hl.call(mt.GT[0], mt.GT[0]),
-                    mt.GT)
-        )
-    except:
-        pass
+    samples = pd.read_csv(sample_tsv, header=None)[0].astype(str).tolist()
 
     mt_filt = mt.filter_cols(hl.array(samples).contains(mt.s))
     mt_filt = hl.variant_qc(mt_filt)
     mt_filt = mt_filt.filter_rows(mt_filt.variant_qc.AC[1]>0)
-    hl.export_vcf(mt_filt, os.path.basename(samples_file).split('.txt')[0]+'.vcf.bgz', metadata=header)
+    hl.export_vcf(mt_filt, f"{out_prefix}.vcf.bgz", metadata=header)
     EOF
 
-    python3 subset_samples.py ~{vcf_file} ~{samples_file} ~{cpu_cores} ~{memory} ~{genome_build}
+    python3 subset_samples.py \
+        ~{vcf_file} \
+        ~{sample_tsv} \
+        ~{final_output_vcf_prefix} \
+        ~{cpu_cores} \
+        ~{memory} \
+        ~{genome_build}
     >>>
 
     output {
-        File vcf_subset = basename(samples_file, '.txt') + '.vcf.bgz'
+        File vcf_subset = final_output_vcf_prefix + '.vcf.bgz'
     }
 }
 
