@@ -16,7 +16,6 @@ workflow mergeResultsPython {
         Array[String] tsvs
         String hail_docker
         String merged_filename
-        Float input_size
         RuntimeAttr? runtime_attr_override
     }
 
@@ -25,6 +24,7 @@ workflow mergeResultsPython {
         tsvs=tsvs,
         hail_docker=hail_docker,
         merged_filename=merged_filename,
+        input_size=size(tsvs, 'GB'),
         runtime_attr_override=runtime_attr_override
     }
 
