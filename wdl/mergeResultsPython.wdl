@@ -13,7 +13,7 @@ struct RuntimeAttr {
 
 workflow mergeResultsPython {
      input {
-        Array[String] tsvs
+        File tsv_filenames
         String hail_docker
         String merged_filename
         RuntimeAttr? runtime_attr_override
@@ -21,10 +21,9 @@ workflow mergeResultsPython {
 
     call helpers.mergeResultsPython as mergeResults {
         input:
-        tsvs=tsvs,
+        tsvs=read_lines(tsv_filenames),
         hail_docker=hail_docker,
         merged_filename=merged_filename,
-        input_size=size(tsvs, 'GB'),
         runtime_attr_override=runtime_attr_override
     }
 
