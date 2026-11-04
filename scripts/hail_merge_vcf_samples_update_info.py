@@ -308,6 +308,17 @@ final_mt = final_mt.annotate_rows(
         cohort_AF=final_mt.variant_qc.AF[1]
     )
 )
+# AC/AF/AN were taken from the first VCF with the site; replace them with the merged counts
+merged_counts = {
+    "AC": [final_mt.variant_qc.AC[1]],
+    "AF": [final_mt.variant_qc.AF[1]],
+    "AN": final_mt.variant_qc.AN,
+}
+final_mt = final_mt.annotate_rows(
+    info_new=final_mt.info_new.annotate(
+        **{field: value for field, value in merged_counts.items() if field in final_mt.info_new}
+    )
+)
 
 # Replace info with info_new for exporting to VCF
 final_mt = final_mt.annotate_rows(
