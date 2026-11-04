@@ -16,10 +16,11 @@ task addGenotypes {
         File vcf_file
         String hail_docker
         String genome_build
+        String hail_vcf_utils_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/tags/hail-vcf-utils-v0.1/scripts/hail_vcf_utils.py"
         RuntimeAttr? runtime_attr_override
     }
 
-    Float input_size = size([annot_vcf_file, vcf_file], "GB") 
+    Float input_size = size([annot_vcf_file, vcf_file], "GB")
     Float base_disk_gb = 10.0
 
     RuntimeAttr runtime_default = object {
@@ -59,6 +60,7 @@ task addGenotypes {
     import os
     import json
     import argparse
+    from hail_vcf_utils import split_multi_ssc
 
     parser = argparse.ArgumentParser(description='Parse arguments')
     parser.add_argument('-i', dest='vcf_file', help='Input VCF file before annotation')
@@ -86,30 +88,6 @@ task addGenotypes {
             tmp_dir="tmp", local_tmpdir="tmp",
                         )
 
-    #split-multi
-    def split_multi_ssc(mt):
-        mt = mt.annotate_rows(num_alleles = mt.alleles.size() ) # Add number of alleles at site before split
-        # only split variants that aren't already split
-        bi = mt.filter_rows(hl.len(mt.alleles) == 2)
-        bi = bi.annotate_rows(a_index=1, was_split=False, old_locus=bi.locus, old_alleles=bi.alleles)
-        multi = mt.filter_rows(hl.len(mt.alleles) > 2)
-        # Now split
-        split = hl.split_multi(multi, permit_shuffle=True)
-        sm = split.union_rows(bi)
-        # sm = hl.split_multi(mt, permit_shuffle=True)
-        if 'PL' in list(mt.entry.keys()):
-            pl = hl.or_missing(hl.is_defined(sm.PL),
-                            (hl.range(0, 3).map(lambda i: hl.min(hl.range(0, hl.len(sm.PL))
-            .filter(lambda j: hl.downcode(hl.unphased_diploid_gt_index_call(j), sm.a_index) == hl.unphased_diploid_gt_index_call(i))
-            .map(lambda j: sm.PL[j])))))
-            sm = sm.annotate_entries(PL = pl)
-        split_ds = sm.annotate_entries(GT = hl.downcode(sm.GT, sm.a_index),
-                                    AD = hl.or_missing(hl.is_defined(sm.AD), [hl.sum(sm.AD) - sm.AD[sm.a_index], sm.AD[sm.a_index]])
-                                    ) 
-            #GQ = hl.cond(hl.is_defined(pl[0]) & hl.is_defined(pl[1]) & hl.is_defined(pl[2]), hl.gq_from_pl(pl), sm.GQ) )
-        mt = split_ds.drop('old_locus', 'old_alleles')
-        return mt
-
     mt = hl.import_vcf(vcf_file, force_bgz=True, array_elements_required=False, call_fields=[], reference_genome=build)
     mt = split_multi_ssc(mt)
     try:
@@ -131,6 +109,7 @@ task addGenotypes {
     hl.export_vcf(dataset=annot_mt, output=combined_vcf_name, metadata=header, tabix=True)
     EOF
 
+    curl -L ~{hail_vcf_utils_script} -o hail_vcf_utils.py
     python3 merge_vcfs.py -i ~{vcf_file} -a ~{annot_vcf_file} -o ~{combined_vcf_name} --cores ~{cpu_cores} --mem ~{memory} \
         --build ~{genome_build}
     >>>

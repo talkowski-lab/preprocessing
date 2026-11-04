@@ -4,6 +4,7 @@ import pandas as pd
 from typing import List
 import argparse
 import numpy as np
+from hail_vcf_utils import split_multi_ssc, subset_allele_info_fields
 
 parser = argparse.ArgumentParser(description="Merge vcf_files sample-wise with Hail and update INFO fields")
 
@@ -55,7 +56,10 @@ def import_vcf_with_partitions(
                 VQSLOD=hl.float(mt.info.VQSLOD)
             )
         )
-    return mt
+    # Split multiallelics before merging, so the same allele is keyed the same way in every VCF
+    mt = split_multi_ssc(mt)
+    mt = subset_allele_info_fields(mt, hl.get_vcf_metadata(vcf_path)['info'])
+    return mt.drop('num_alleles', 'a_index', 'was_split')
 
 def import_batch_and_union_cols(
     vcf_paths: List[str],

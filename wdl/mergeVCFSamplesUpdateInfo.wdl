@@ -13,6 +13,7 @@ workflow MergeVCFSamplesUpdateInfo {
     input {
         Array[File] vcf_files
         String merge_vcf_samples_update_info_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/heads/main/scripts/hail_merge_vcf_samples_update_info.py"
+        String hail_vcf_utils_script = "https://raw.githubusercontent.com/talkowski-lab/preprocessing/refs/tags/hail-vcf-utils-v0.1/scripts/hail_vcf_utils.py"
         String hail_docker
         String prefix
 
@@ -28,6 +29,7 @@ workflow MergeVCFSamplesUpdateInfo {
     call mergeVCFSamplesUpdateInfo {
         input:
             merge_vcf_samples_update_info_script = merge_vcf_samples_update_info_script,
+            hail_vcf_utils_script = hail_vcf_utils_script,
             vcf_files = vcf_files,
             batch_size = batch_size,
             output_vcf_file = output_vcf_file,
@@ -45,6 +47,7 @@ workflow MergeVCFSamplesUpdateInfo {
 task mergeVCFSamplesUpdateInfo {
     input {
         String merge_vcf_samples_update_info_script
+        String hail_vcf_utils_script
         Array[File] vcf_files
         Int batch_size
         String output_vcf_file
@@ -88,6 +91,7 @@ task mergeVCFSamplesUpdateInfo {
 
         # Write the Python script to a temporary file
         curl -L ~{merge_vcf_samples_update_info_script} -o merge_vcf_files.py
+        curl -L ~{hail_vcf_utils_script} -o hail_vcf_utils.py
 
         # Run the Python script with the provided arguments
         python3 merge_vcf_files.py \
