@@ -6,35 +6,17 @@ import argparse
 import numpy as np
 from hail_vcf_utils import split_multi_ssc, subset_allele_info_fields
 
-parser = argparse.ArgumentParser(description="Merge vcf_files sample-wise with Hail and update INFO fields")
+def parse_args():
+    parser = argparse.ArgumentParser(description="Merge vcf_files sample-wise with Hail and update INFO fields")
 
-parser.add_argument("--vcf-files", nargs="+", help="List of VCF files to merge")
-parser.add_argument("--batch-size", type=int, help="Batch size (number of vcf_files) for processing")
-parser.add_argument("--output-vcf-file", type=str, help="Path for final VCF output")
-parser.add_argument("--mem", type=float, help="Memory in GB to allocate for Hail processing")
-parser.add_argument("--max-info-fields", nargs="+", help="List of INFO fields to merge by taking the max")
-parser.add_argument("--min-info-fields", nargs="+", help="List of INFO fields to merge by taking the min")
-parser.add_argument("--sum-info-fields", nargs="+", help="List of INFO fields to merge by taking the sum")
-args = parser.parse_args()
-
-vcf_files = args.vcf_files
-batch_size = args.batch_size
-output_vcf = args.output_vcf_file
-mem = args.mem
-max_info_fields = args.max_info_fields
-min_info_fields = args.min_info_fields
-sum_info_fields = args.sum_info_fields
-
-hl.init(
-    min_block_size=128, 
-    local=f"local[*]", 
-    spark_conf={
-        "spark.driver.memory": f"{int(np.floor(mem*0.8))}g",
-        "spark.speculation": 'true'
-    }, 
-    tmp_dir="tmp",
-    local_tmpdir="tmp",
-)
+    parser.add_argument("--vcf-files", nargs="+", help="List of VCF files to merge")
+    parser.add_argument("--batch-size", type=int, help="Batch size (number of vcf_files) for processing")
+    parser.add_argument("--output-vcf-file", type=str, help="Path for final VCF output")
+    parser.add_argument("--mem", type=float, help="Memory in GB to allocate for Hail processing")
+    parser.add_argument("--max-info-fields", nargs="+", help="List of INFO fields to merge by taking the max")
+    parser.add_argument("--min-info-fields", nargs="+", help="List of INFO fields to merge by taking the min")
+    parser.add_argument("--sum-info-fields", nargs="+", help="List of INFO fields to merge by taking the sum")
+    return parser.parse_args()
 
 def import_vcf_with_partitions(
     vcf_path: str,
@@ -191,145 +173,170 @@ def union_many_vcf_files(
 
     print("=== VCF column union workflow complete ===")
 
-tmp_prefix = output_vcf.split('.vcf')[0]
-final_out = f"{tmp_prefix}.merged.mt"
-union_many_vcf_files(
-    vcf_paths=vcf_files,
-    batch_size=batch_size,
-    tmp_prefix=tmp_prefix,
-    final_out=final_out,
-)
+def main():
+    args = parse_args()
 
-final_mt = hl.read_matrix_table(path=final_out)
+    vcf_files = args.vcf_files
+    batch_size = args.batch_size
+    output_vcf = args.output_vcf_file
+    mem = args.mem
+    max_info_fields = args.max_info_fields
+    min_info_fields = args.min_info_fields
+    sum_info_fields = args.sum_info_fields
 
-# Fill missing GTs with 0/0
-final_mt = final_mt.annotate_entries(
-    GT=hl.or_else(
-        final_mt.GT,
-        hl.call(0, 0)
+    hl.init(
+        min_block_size=128,
+        local=f"local[*]",
+        spark_conf={
+            "spark.driver.memory": f"{int(np.floor(mem*0.8))}g",
+            "spark.speculation": 'true'
+        },
+        tmp_dir="tmp",
+        local_tmpdir="tmp",
     )
-)
 
-# -------------------------------
-# Update INFO field values after merging VCFs across samples
-# -------------------------------
-merge_strategy = {"max": max_info_fields, "min": min_info_fields, "sum": sum_info_fields}
-
-# -------------------------------
-# Collect all row fields
-# -------------------------------
-row_fields = list(final_mt.row)
-
-# -------------------------------
-# QUAL aggregation (min across VCFs)
-# -------------------------------
-qual_fields_list = [f for f in row_fields if f.startswith("qual")]
-final_mt = final_mt.annotate_rows(
-    qual=hl.min(
-        hl.array([final_mt[f] for f in qual_fields_list])
+    tmp_prefix = output_vcf.split('.vcf')[0]
+    final_out = f"{tmp_prefix}.merged.mt"
+    union_many_vcf_files(
+        vcf_paths=vcf_files,
+        batch_size=batch_size,
+        tmp_prefix=tmp_prefix,
+        final_out=final_out,
     )
-)
 
-# -------------------------------
-# FILTER aggregation (union across VCFs)
-# -------------------------------
-filters_fields_list = [f for f in row_fields if f.startswith("filters")]
-final_mt = final_mt.annotate_rows(
-    filters=hl.flatten(
-        hl.set([final_mt[f] for f in filters_fields_list])
+    final_mt = hl.read_matrix_table(path=final_out)
+
+    # Fill missing GTs with 0/0
+    final_mt = final_mt.annotate_entries(
+        GT=hl.or_else(
+            final_mt.GT,
+            hl.call(0, 0)
+        )
     )
-)
 
-# -------------------------------
-# INFO fields aggregation
-# -------------------------------
-info_fields_list = [f for f in row_fields if f.startswith("info")]
+    # -------------------------------
+    # Update INFO field values after merging VCFs across samples
+    # -------------------------------
+    merge_strategy = {"max": max_info_fields, "min": min_info_fields, "sum": sum_info_fields}
 
-agg_map = {"min": hl.min, "max": hl.max, "sum": hl.sum}
+    # -------------------------------
+    # Collect all row fields
+    # -------------------------------
+    row_fields = list(final_mt.row)
 
-# Start with empty struct to avoid issues when original 'info' is empty
-final_mt = final_mt.annotate_rows(
-    info_new=hl.struct()
-)
+    # -------------------------------
+    # QUAL aggregation (min across VCFs)
+    # -------------------------------
+    qual_fields_list = [f for f in row_fields if f.startswith("qual")]
+    final_mt = final_mt.annotate_rows(
+        qual=hl.min(
+            hl.array([final_mt[f] for f in qual_fields_list])
+        )
+    )
 
-# Step 1: Aggregate merge_strategy fields (min/max/sum)
-for strat, fields in merge_strategy.items():
-    agg_fn = agg_map[strat]
-    for field in fields:
+    # -------------------------------
+    # FILTER aggregation (union across VCFs)
+    # -------------------------------
+    filters_fields_list = [f for f in row_fields if f.startswith("filters")]
+    final_mt = final_mt.annotate_rows(
+        filters=hl.flatten(
+            hl.set([final_mt[f] for f in filters_fields_list])
+        )
+    )
+
+    # -------------------------------
+    # INFO fields aggregation
+    # -------------------------------
+    info_fields_list = [f for f in row_fields if f.startswith("info")]
+
+    agg_map = {"min": hl.min, "max": hl.max, "sum": hl.sum}
+
+    # Start with empty struct to avoid issues when original 'info' is empty
+    final_mt = final_mt.annotate_rows(
+        info_new=hl.struct()
+    )
+
+    # Step 1: Aggregate merge_strategy fields (min/max/sum)
+    for strat, fields in merge_strategy.items():
+        agg_fn = agg_map[strat]
+        for field in fields:
+            final_mt = final_mt.annotate_rows(
+                info_new=final_mt.info_new.annotate(
+                    **{
+                        field: agg_fn(
+                            hl.array([final_mt[f][field] for f in info_fields_list])
+                        )
+                    }
+                )
+            )
+
+    # Step 2: For all other INFO fields, take first non-missing value
+
+    all_info_keys = set()
+    for f in info_fields_list:
+        all_info_keys.update(final_mt[f].dtype.keys())
+
+    handled_keys = set(sum(merge_strategy.values(), []))
+    other_info_keys = all_info_keys - handled_keys
+
+    for field in other_info_keys:
+        # Only include INFO structs that actually have this field
+        exprs = [
+            final_mt[f][field]
+            for f in info_fields_list
+            if field in final_mt[f].dtype
+        ]
+
         final_mt = final_mt.annotate_rows(
             info_new=final_mt.info_new.annotate(
                 **{
-                    field: agg_fn(
-                        hl.array([final_mt[f][field] for f in info_fields_list])
-                    )
+                    field: hl.find(lambda x: hl.is_defined(x), exprs)
                 }
             )
         )
 
-# Step 2: For all other INFO fields, take first non-missing value
+    # -------------------------------
+    # Checkpoint before cohort-level QC
+    # -------------------------------
+    final_out_updated = f"{tmp_prefix}.merged.updated.info.mt"
+    final_mt = final_mt.checkpoint(final_out_updated)
 
-all_info_keys = set()
-for f in info_fields_list:
-    all_info_keys.update(final_mt[f].dtype.keys())
-
-handled_keys = set(sum(merge_strategy.values(), []))
-other_info_keys = all_info_keys - handled_keys
-
-for field in other_info_keys:
-    # Only include INFO structs that actually have this field
-    exprs = [
-        final_mt[f][field]
-        for f in info_fields_list
-        if field in final_mt[f].dtype
-    ]
-
+    # -------------------------------
+    # Recalculate cohort-level QC after filling missing GTs
+    # -------------------------------
+    final_mt = hl.variant_qc(final_mt)
     final_mt = final_mt.annotate_rows(
         info_new=final_mt.info_new.annotate(
-            **{
-                field: hl.find(lambda x: hl.is_defined(x), exprs)
-            }
+            cohort_AN=final_mt.variant_qc.AN,
+            cohort_AC=final_mt.variant_qc.AC[1],
+            cohort_AF=final_mt.variant_qc.AF[1]
+        )
+    )
+    # AC/AF/AN were taken from the first VCF with the site; replace them with the merged counts
+    merged_counts = {
+        "AC": [final_mt.variant_qc.AC[1]],
+        "AF": [final_mt.variant_qc.AF[1]],
+        "AN": final_mt.variant_qc.AN,
+    }
+    final_mt = final_mt.annotate_rows(
+        info_new=final_mt.info_new.annotate(
+            **{field: value for field, value in merged_counts.items() if field in final_mt.info_new}
         )
     )
 
-# -------------------------------
-# Checkpoint before cohort-level QC
-# -------------------------------
-final_out_updated = f"{tmp_prefix}.merged.updated.info.mt"
-final_mt = final_mt.checkpoint(final_out_updated)
-
-# -------------------------------
-# Recalculate cohort-level QC after filling missing GTs
-# -------------------------------
-final_mt = hl.variant_qc(final_mt)
-final_mt = final_mt.annotate_rows(
-    info_new=final_mt.info_new.annotate(
-        cohort_AN=final_mt.variant_qc.AN,
-        cohort_AC=final_mt.variant_qc.AC[1],
-        cohort_AF=final_mt.variant_qc.AF[1]
+    # Replace info with info_new for exporting to VCF
+    final_mt = final_mt.annotate_rows(
+        info=final_mt.info_new
     )
-)
-# AC/AF/AN were taken from the first VCF with the site; replace them with the merged counts
-merged_counts = {
-    "AC": [final_mt.variant_qc.AC[1]],
-    "AF": [final_mt.variant_qc.AF[1]],
-    "AN": final_mt.variant_qc.AN,
-}
-final_mt = final_mt.annotate_rows(
-    info_new=final_mt.info_new.annotate(
-        **{field: value for field, value in merged_counts.items() if field in final_mt.info_new}
+
+    # Assumes uniform header across VCFs --> just grab first VCF's header
+    header = hl.get_vcf_metadata(vcf_files[0])
+
+    hl.export_vcf(
+        final_mt,
+        output=output_vcf,
+        metadata=header
     )
-)
 
-# Replace info with info_new for exporting to VCF
-final_mt = final_mt.annotate_rows(
-    info=final_mt.info_new
-)
-
-# Assumes uniform header across VCFs --> just grab first VCF's header
-header = hl.get_vcf_metadata(vcf_files[0])
-
-hl.export_vcf(
-    final_mt,
-    output=output_vcf,
-    metadata=header
-)
+if __name__ == "__main__":
+    main()
