@@ -271,13 +271,14 @@ def main():
             )
 
     # Step 2: For all other INFO fields, take first non-missing value
+    # (kept in input header order, not set order, so the output is the same on every run)
 
-    all_info_keys = set()
+    all_info_keys = []
     for f in info_fields_list:
-        all_info_keys.update(final_mt[f].dtype.keys())
+        all_info_keys += [k for k in final_mt[f].dtype.keys() if k not in all_info_keys]
 
     handled_keys = set(sum(merge_strategy.values(), []))
-    other_info_keys = all_info_keys - handled_keys
+    other_info_keys = [k for k in all_info_keys if k not in handled_keys]
 
     for field in other_info_keys:
         # Only include INFO structs that actually have this field
