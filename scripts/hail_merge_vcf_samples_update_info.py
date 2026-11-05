@@ -528,27 +528,21 @@ def main():
         )
 
     # -------------------------------
-    # Checkpoint before cohort-level QC
+    # Recalculate cohort-level allele counts after filling missing GTs
     # -------------------------------
-    final_out_updated = f"{tmp_prefix}.merged.updated.info.mt"
-    final_mt = final_mt.checkpoint(final_out_updated)
-
-    # -------------------------------
-    # Recalculate cohort-level QC after filling missing GTs
-    # -------------------------------
-    final_mt = hl.variant_qc(final_mt)
+    final_mt = final_mt.annotate_rows(_call_stats=hl.agg.call_stats(final_mt.GT, final_mt.alleles))
     final_mt = final_mt.annotate_rows(
         info_new=final_mt.info_new.annotate(
-            cohort_AN=final_mt.variant_qc.AN,
-            cohort_AC=final_mt.variant_qc.AC[1],
-            cohort_AF=final_mt.variant_qc.AF[1]
+            cohort_AN=final_mt._call_stats.AN,
+            cohort_AC=final_mt._call_stats.AC[1],
+            cohort_AF=final_mt._call_stats.AF[1]
         )
     )
     # AC/AF/AN were taken from the first VCF with the site; replace them with the merged counts
     merged_counts = {
-        "AC": [final_mt.variant_qc.AC[1]],
-        "AF": [final_mt.variant_qc.AF[1]],
-        "AN": final_mt.variant_qc.AN,
+        "AC": [final_mt._call_stats.AC[1]],
+        "AF": [final_mt._call_stats.AF[1]],
+        "AN": final_mt._call_stats.AN,
     }
     final_mt = final_mt.annotate_rows(
         info_new=final_mt.info_new.annotate(
