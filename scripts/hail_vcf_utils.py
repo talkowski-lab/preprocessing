@@ -8,12 +8,27 @@ every pipeline that splits alleles must split them the same way for joins on (lo
 import hail as hl
 
 
+def diploidize_calls(mt: hl.MatrixTable) -> hl.MatrixTable:
+    """
+    Convert haploid calls to homozygous diploid calls (0 -> 0/0, 1 -> 1/1), so every call in the
+    pipeline is diploid. Haploid calls come from DRAGEN gVCFs, which call males' non-PAR chrX/chrY
+    with ploidy 1; GATK HaplotypeCaller calls every sample diploid. The PL of a converted call is set
+    to missing: a haploid PL has one value per allele and no diploid equivalent.
+    Call before split_multi_ssc(), whose PL downcoding assumes diploid calls.
+    """
+    is_haploid = hl.coalesce(mt.GT.ploidy == 1, False)
+    converted = {'GT': hl.if_else(is_haploid, hl.call(mt.GT[0], mt.GT[0]), mt.GT)}
+    if 'PL' in list(mt.entry.keys()):
+        converted['PL'] = hl.or_missing(~is_haploid, mt.PL)
+    return mt.annotate_entries(**converted)
+
+
 def split_multi_ssc(mt: hl.MatrixTable) -> hl.MatrixTable:
     """
     Split multiallelic sites. Biallelic sites are left as they are; split alleles are minimally
     represented by hl.split_multi. Adds row fields num_alleles, a_index and was_split.
-    GT, AD and PL are downcoded to the split allele. INFO is not changed: call
-    subset_allele_info_fields() afterwards.
+    GT, AD and PL are downcoded to the split allele; PL downcoding assumes diploid calls, so call
+    diploidize_calls() first. INFO is not changed: call subset_allele_info_fields() afterwards.
     """
     mt = mt.annotate_rows(num_alleles = mt.alleles.size() ) # Add number of alleles at site before split
     # only split variants that aren't already split

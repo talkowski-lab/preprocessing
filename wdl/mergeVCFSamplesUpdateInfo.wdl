@@ -42,6 +42,7 @@ workflow MergeVCFSamplesUpdateInfo {
         # GATK already writes samples with no reads as 0/0 (GQ 0, DP 0), so with all/absent AN counts them too;
         # with absent_at_genotyped_loci/none, a variant in only one VCF gets AN from that VCF's samples alone, inflating AF.
         # with all/absent, recompute AN/AC/AF downstream from genotypes that pass QC (e.g. GQ, DP, AB cutoffs)
+        # every call is made diploid before merging (haploid DRAGEN male chrX/chrY calls become 0/0 or 1/1), so fills are 0/0
         String fill_missing = "absent"
         # OPTIONAL: VCF header to use for every input VCF
         File? header_file

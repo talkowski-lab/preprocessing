@@ -4,7 +4,7 @@ import pandas as pd
 from typing import Dict, List, Optional, Tuple
 import argparse
 import numpy as np
-from hail_vcf_utils import split_multi_ssc, subset_allele_info_fields
+from hail_vcf_utils import diploidize_calls, split_multi_ssc, subset_allele_info_fields
 
 FILL_MISSING_MODES = {
     "all": "every missing GT becomes 0/0, including no-calls (./.) present in the input VCFs",
@@ -70,13 +70,16 @@ def prepare_vcf(
     samples_to_keep: Optional[List[str]],
 ) -> hl.MatrixTable:
     """
-    Prepare a VCF imported by import_and_check_vcfs() for the union: subset samples, split
-    multiallelics, subset per-allele INFO, select FORMAT fields and rename samples.
+    Prepare a VCF imported by import_and_check_vcfs() for the union: subset samples, make every
+    call diploid, split multiallelics, subset per-allele INFO, select FORMAT fields and rename samples.
     """
     print(f"  Preparing VCF: {vcf_input['path']}", flush=True)
     mt = vcf_input['mt']
     if samples_to_keep is not None:
         mt = mt.filter_cols(hl.literal(set(samples_to_keep)).contains(mt.s))
+    # Haploid calls (males' non-PAR chrX/chrY in DRAGEN-based VCFs) become homozygous diploid,
+    # so the merged VCF is all diploid and filled genotypes (0/0) match every sample's calls
+    mt = diploidize_calls(mt)
     # Split multiallelics before merging, so the same allele is keyed the same way in every VCF
     mt = split_multi_ssc(mt)
     mt = subset_allele_info_fields(mt, vcf_input['info_header'])

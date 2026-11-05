@@ -60,7 +60,7 @@ task addGenotypes {
     import os
     import json
     import argparse
-    from hail_vcf_utils import split_multi_ssc
+    from hail_vcf_utils import diploidize_calls, split_multi_ssc
 
     parser = argparse.ArgumentParser(description='Parse arguments')
     parser.add_argument('-i', dest='vcf_file', help='Input VCF file before annotation')
@@ -89,17 +89,10 @@ task addGenotypes {
                         )
 
     mt = hl.import_vcf(vcf_file, force_bgz=True, array_elements_required=False, call_fields=[], reference_genome=build)
+    # haploid calls (males' non-PAR chrX/chrY in DRAGEN-based VCFs) become homozygous diploid,
+    # before splitting, whose PL downcoding assumes diploid calls
+    mt = diploidize_calls(mt)
     mt = split_multi_ssc(mt)
-    try:
-        # for haploid (e.g. chrY)
-        mt = mt.annotate_entries(
-            GT = hl.if_else(
-                    mt.GT.ploidy == 1, 
-                    hl.call(mt.GT[0], mt.GT[0]),
-                    mt.GT)
-        )
-    except:
-        pass
 
     header = hl.get_vcf_metadata(annot_vcf_file) 
     annot_mt = hl.import_vcf(annot_vcf_file, force_bgz=True, array_elements_required=False, call_fields=[], reference_genome=build)
