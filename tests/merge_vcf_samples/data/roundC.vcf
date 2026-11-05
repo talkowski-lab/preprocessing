@@ -1,0 +1,16 @@
+##fileformat=VCFv4.2
+##FILTER=<ID=PASS,Description="All filters passed">
+##FILTER=<ID=LowQual,Description="Low quality">
+##INFO=<ID=AC,Number=A,Type=Integer,Description="Allele count in genotypes">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele frequency">
+##INFO=<ID=AN,Number=1,Type=Integer,Description="Total number of alleles in called genotypes">
+##INFO=<ID=AS_VQSLOD,Number=A,Type=Float,Description="Allele-specific VQSLOD">
+##INFO=<ID=VQSLOD,Number=1,Type=Float,Description="VQSLOD">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Approximate read depth">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">
+##FORMAT=<ID=PL,Number=G,Type=Integer,Description="Phred-scaled genotype likelihoods">
+##contig=<ID=chr1,length=248956422>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	C1	C2
+chr1	1000	.	A	AT	45	PASS	AC=1;AF=0.25;AN=4;AS_VQSLOD=2.5;VQSLOD=2.5;DP=25	GT:AD:PL	0/1:5,5:50,0,50	0/0:10,0:0,30,300
+chr1	3000	.	G	C	45	PASS	AC=1;AF=0.25;AN=4;AS_VQSLOD=5.0;VQSLOD=5.0;DP=25	GT:AD:PL	0/0:10,0:0,30,300	0/1:5,5:50,0,50
