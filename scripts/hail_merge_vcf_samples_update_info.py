@@ -158,9 +158,13 @@ def union_vcf_files_in_batches(
 
 def recursive_union_cols(
     mt_paths: List[str],
-    final_out: str,
+    tmp_prefix: str,
     row_join_type: str,
-):
+) -> str:
+    """
+    Union the batch MTs pairwise, writing each round's unions, until one MT is left.
+    Returns the path of that MT (a batch MT if there is only one batch).
+    """
     current = mt_paths
     round_num = 0
 
@@ -188,7 +192,7 @@ def recursive_union_cols(
                 drop_right_row_fields=False,
             )
 
-            out = f"{final_out}.round_{round_num}_{i // 2}.mt"
+            out = f"{tmp_prefix}.round_{round_num}_{i // 2}.mt"
             print(f"  Writing intermediate MT to {out}")
             merged.write(
                 out,
@@ -200,22 +204,21 @@ def recursive_union_cols(
         current = next_round
         round_num += 1
 
-    # Write final unioned MT
-    print(f"\nWriting final unioned MT to {final_out}")
-    hl.read_matrix_table(path=current[0]).write(
-        final_out,
-        overwrite=True
-    )
+    # The last MT written already holds the full union, so it is used as is rather than copied
+    print(f"\nFinal unioned MT: {current[0]}")
+    return current[0]
 
 def union_many_vcf_files(
     vcf_inputs: List[dict],
     batch_size: int,
     tmp_prefix: str,
-    final_out: str,
     prepare_args: dict,
     row_join_type: str,
     loci_prefix: Optional[str],
-):
+) -> str:
+    """
+    Union all input VCFs by columns; returns the path of the unioned MT.
+    """
     print("=== Starting VCF column union workflow ===")
 
     intermediates = union_vcf_files_in_batches(
@@ -227,13 +230,14 @@ def union_many_vcf_files(
         loci_prefix=loci_prefix,
     )
 
-    recursive_union_cols(
+    final_path = recursive_union_cols(
         mt_paths=intermediates,
-        final_out=final_out,
+        tmp_prefix=tmp_prefix,
         row_join_type=row_join_type,
     )
 
     print("=== VCF column union workflow complete ===")
+    return final_path
 
 def fill_missing_genotypes(
     mt: hl.MatrixTable,
@@ -402,19 +406,17 @@ def main():
     }
 
     tmp_prefix = output_vcf.split('.vcf')[0]
-    final_out = f"{tmp_prefix}.merged.mt"
     loci_prefix = f"{tmp_prefix}.genotyped_loci" if fill_missing == "absent_at_genotyped_loci" else None
-    union_many_vcf_files(
+    final_path = union_many_vcf_files(
         vcf_inputs=vcf_inputs,
         batch_size=batch_size,
         tmp_prefix=tmp_prefix,
-        final_out=final_out,
         prepare_args=prepare_args,
         row_join_type=site_join,
         loci_prefix=loci_prefix,
     )
 
-    final_mt = hl.read_matrix_table(path=final_out)
+    final_mt = hl.read_matrix_table(path=final_path)
 
     # -------------------------------
     # Fill missing GTs (see FILL_MISSING_MODES)
